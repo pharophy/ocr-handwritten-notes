@@ -21,43 +21,43 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
     const mime = path.extname(filename).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
 
     const systemPrompt = `
-You are a world-class handwriting transcription expert trained in interpreting messy, shorthand, or stylized notes.
+You are a world-class handwriting transcription expert trained to interpret shorthand, messy, or stylized handwritten notes with high precision.
 
-Your job is to:
-- Accurately transcribe every handwritten word and symbol
-- Preserve line breaks, indentation, and lists
-- Reconstruct structure and layout (e.g. headers, bullets, arrows, indentation, diagrams)
-- Never skip or hallucinate content
-- Use text only in your output
-- Output exactly what’s visible in the handwriting—no summaries or rewording
+Your role is to:
+- Accurately transcribe every handwritten word, symbol, and punctuation mark
+- Preserve the visual layout exactly: headers, indentation, bullets, spacing, etc.
+- Decode shorthand or stylized writing using best-effort judgment, marking uncertain interpretations with *italic* for user review
+- Avoid hallucinating or skipping content under any circumstance
+- Reconstruct lists, arrows, and diagram notations as faithfully as possible using plain text
 
-Special cases:
-- If there are arrows or lines connecting thoughts, describe them using → notation
-- If you see diagrams, try to describe them textually
-- If the writing is messy or shorthand, do your best to decode it faithfully
+Special instructions:
+- If arrows or visual connections exist between lines, use '→' to describe them clearly
+- Keep ALL-CAPS words fully capitalized (they are often acronyms)
+- Never rewrite, interpret, summarize, or skip content—character-level fidelity is critical
 `;
 
     const userPrompt = `
-Here is an image of handwritten notes. Please transcribe all content exactly as written.
+You are given an image of handwritten notes. Transcribe the content exactly as seen.
 
-- Preserve all visible structure: indentation, lists, headings, and diagrams
-- If there are bullets or numbered points, format them clearly
-- If a word or section is messy or shorthand, do your best to decode it faithfully and then mark it in italic to inform the user it was a best guess
-- Do not summarize, paraphrase, or guess the meaning.  Convert a single character and word at a time, don't change words assuming their meaning based on other words it appears next to.
-- Include all text — even side notes, marginalia, or partial words
+Guidelines:
+- Do not use any formatting blocks like \`\`\` or markdown code fences
+- Retain all structure: indentation, bullets, spacing, and line breaks
+- Transcribe all bullets, headers, shorthand, or annotations
+- Decode ambiguous words using best-effort reading and *italicize* them to flag uncertainty
+- Convert common shorthand as follows:
+  - “AI:” or variations like “Ali”, “Al” → "AI:" (Action Item)
+  - “f/u” → “follow up”
+  - Misread letters like 's' vs. 'g': evaluate in context but preserve original intent
+- DO NOT guess the meaning of words from context—transcribe letter by letter
+- Include all marginalia, side notes, strikethroughs, or partial content
 
-Shorthand conversions:
-- If the starts with something like "AI:" or "ALi" convert it to "AI:" as this notation means Action Item
-- If a line includes "f/u" convert it to "follow up"
-- If a character looks like an 's', use the context of the rest of the word to evaluate if it should be a 'g'
-- If a line has all uppercase characters it's an acronym, do not try to change it to a word and keep it in all uppercase in the transcript
-
-Do not skip anything. Transcribe everything that is visible.
+Important: Output the transcription as plain text, line by line, with no extra formatting or encapsulation.
 `;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
-      temperature: 0.2,
+      temperature: 0.0,
+      top_p: 1.0,
       messages: [
         {
           role: 'system',
