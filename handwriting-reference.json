@@ -1,0 +1,74 @@
+{
+  "referenceWords": [
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "abcdefghijklmnopqrstuvwxyz",
+    "The quick brown fox jumps over the lazy dog",
+    "0123456789",
+    "Apple",
+    "Beautiful",
+    "Calendar",
+    "Document",
+    "Important",
+    "Meeting",
+    "Notes",
+    "Question",
+    "AI:"
+  ],
+  "specialCharacters": [
+    "@ # $ % & * ( ) - _ = + [ ] { } | \\ / ? . , ; :"
+  ],
+  "notes": "This file helps the OCR system understand your handwriting. You can either keep these reference words (and the AI will use them as text context) OR provide a reference image of your actual handwriting.",
+  "referenceImagePath": "./handwriting-samples/reference-sheet.jpeg",
+  "domainGlossary": {
+    "acronyms": {
+      "MLF": "Customer name",
+      "NPB": "Location name, preserve capitalization",
+      "RGM": "Revenue Growth Management",
+      "TPM": "Technical Program Manager or Trade Promotion Management",
+      "RPT": "Report or reporting system",
+      "OKRs": "Objectives and Key Results",
+      "API": "Application Programming Interface",
+      "POC": "Proof of Concept",
+      "REQS": "Requirements",
+      "US": "United States",
+      "PVG": "Location name, preserve capitalization",
+      "NA": "North America",
+      "AioAI": "All-in on AI",
+      "PwC": "Company name",
+      "SAP": "Company name"
+    },
+    "properNouns": [
+      "Pepsi",
+      "Pepsico",
+      "Canada",
+      "Cosine",
+      "Course",
+      "Vacation"
+    ],
+    "businessTerms": [
+      "onboarding",
+      "roadmap",
+      "forecasting",
+      "governance",
+      "tenant",
+      "delivery",
+      "scope",
+      "newsletter",
+      "architecture",
+      "redundancy",
+      "workshop",
+      "upfront",
+      "subsidize"
+    ],
+    "specialNotation": {
+      "arrow": "→",
+      "description": "Arrows indicate flow or consequence, preserve as →"
+    }
+  },
+  "ocrValidation": {
+    "enabled": true,
+    "confidenceThreshold": 0.7,
+    "skipSummarizationThreshold": 0.5,
+    "appendReportOnIssues": true
+  }
+}
