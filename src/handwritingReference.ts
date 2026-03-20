@@ -23,6 +23,13 @@ export interface HandwritingReferenceConfig {
     skipSummarizationThreshold?: number;
     appendReportOnIssues?: boolean;
   };
+  ocrCorrection?: {
+    enabled?: boolean;
+    correctCriticalOnly?: boolean;
+    tagCorrections?: boolean;
+    maxCorrectionsPerImage?: number;
+    minIssueConfidence?: number;
+  };
 }
 
 const DEFAULT_CONFIG_PATH = path.resolve(

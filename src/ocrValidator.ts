@@ -22,6 +22,7 @@ export interface ValidationReport {
   issues: ValidationIssue[];
   summary: string;
   recommendation: 'proceed' | 'review' | 'manual-transcribe';
+  correctionLog?: CorrectionLog[];
 }
 
 export interface ValidationConfig {
@@ -232,6 +233,14 @@ export function formatValidationReport(report: ValidationReport): string {
     });
   }
 
+  // Add correction log if present
+  if (report.correctionLog && report.correctionLog.length > 0) {
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push(formatCorrectionLog(report.correctionLog));
+  }
+
   return lines.join('\n');
 }
 
@@ -292,4 +301,359 @@ function createDefaultReport(): ValidationReport {
     summary: 'Validation unavailable, assuming moderate quality',
     recommendation: 'proceed'
   };
+}
+
+// ============================================================================
+// Multi-Pass Correction
+// ============================================================================
+
+export interface CorrectionResult {
+  correctedText: string;
+  corrections: CorrectionLog[];
+  correctionCount: number;
+}
+
+export interface CorrectionLog {
+  originalPhrase: string;
+  correctedPhrase: string;
+  issueType: string;
+  validationNote: string;
+  confidence: number;
+}
+
+export interface CorrectionConfig {
+  enabled: boolean;
+  correctCriticalOnly: boolean;
+  tagCorrections: boolean;
+  maxCorrectionsPerImage: number;
+  minIssueConfidence: number;
+}
+
+const DEFAULT_CORRECTION_CONFIG: CorrectionConfig = {
+  enabled: true,
+  correctCriticalOnly: true,
+  tagCorrections: true,
+  maxCorrectionsPerImage: 10,
+  minIssueConfidence: 0.8
+};
+
+const CORRECTION_PROMPT_TEMPLATES = {
+  grammar: `Previous transcription: "{phrase}"
+Validation: grammatically incorrect
+
+Common grammar issues to check:
+- Missing words (articles, pronouns, verbs)
+- Wrong verb forms
+- Word order problems
+- Parallel structure breaks
+
+Context:
+{context}
+
+{guidance}
+
+Look at the handwriting carefully. Provide only the corrected phrase, no explanation.`,
+
+  semantics: `Previous transcription: "{phrase}"
+Validation: semantically unclear or doesn't make sense
+
+Check for:
+- Misread business terms
+- Company/project names
+- Context from surrounding text
+
+Context:
+{context}
+
+{guidance}
+
+Does this phrase make sense in a business meeting context?
+Look at the handwriting and provide the corrected phrase only.`,
+
+  incomplete: `Previous transcription: "{phrase}"
+Validation: appears incomplete or truncated
+
+Context:
+{context}
+
+{guidance}
+
+Are there additional words that weren't transcribed?
+Look for trailing text and provide the complete phrase.`,
+
+  encoding: `Previous transcription: "{phrase}"
+Validation: encoding or character error
+
+Context:
+{context}
+
+{guidance}
+
+Check for special characters, symbols, or number/letter confusion.
+Provide the corrected phrase with proper characters.`
+};
+
+const openaiForCorrection = new OpenAI({
+  apiKey: OPEN_AI_KEY
+});
+
+/**
+ * Applies multi-pass correction to OCR output based on validation findings
+ */
+export async function correctOCRIssues(
+  originalText: string,
+  imageBuffer: Buffer,
+  validation: ValidationReport,
+  config?: Partial<CorrectionConfig>
+): Promise<CorrectionResult> {
+  const cfg = { ...DEFAULT_CORRECTION_CONFIG, ...config };
+
+  // Early returns
+  if (!cfg.enabled) {
+    return { correctedText: originalText, corrections: [], correctionCount: 0 };
+  }
+
+  if (!validation.hasIssues) {
+    return { correctedText: originalText, corrections: [], correctionCount: 0 };
+  }
+
+  // Filter critical issues with high confidence
+  let criticalIssues = validation.issues.filter(
+    i => i.severity === 'critical' && i.confidence >= cfg.minIssueConfidence
+  );
+
+  if (cfg.correctCriticalOnly) {
+    criticalIssues = criticalIssues.filter(i => i.severity === 'critical');
+  }
+
+  if (criticalIssues.length === 0) {
+    return { correctedText: originalText, corrections: [], correctionCount: 0 };
+  }
+
+  // Limit corrections per image
+  criticalIssues = criticalIssues.slice(0, cfg.maxCorrectionsPerImage);
+
+  let correctedText = originalText;
+  const corrections: CorrectionLog[] = [];
+  const correctedPhrases = new Set<string>();
+
+  // Load glossary for context hints
+  const reference = await loadHandwritingReference();
+  const glossary = reference.domainGlossary || {};
+
+  for (const issue of criticalIssues) {
+    // Skip if already processed
+    if (correctedPhrases.has(issue.phrase)) {
+      continue;
+    }
+
+    // Check if phrase still exists in text (may have been modified by previous correction)
+    if (!correctedText.includes(issue.phrase)) {
+      continue;
+    }
+
+    // Skip if this phrase has already been corrected (has [corrected] tag)
+    if (correctedText.includes(issue.phrase + '[corrected]')) {
+      continue;
+    }
+
+    try {
+      // Extract context
+      const context = extractContext(correctedText, issue.phrase);
+
+      // Build correction prompt
+      const prompt = buildCorrectionPrompt(issue, context, glossary);
+
+      // Request targeted correction
+      const correctedPhrase = await requestPhraseCorrection(imageBuffer, prompt);
+
+      if (correctedPhrase && correctedPhrase !== issue.phrase && correctedPhrase.trim().length > 0) {
+        // Tag if enabled
+        const replacement = cfg.tagCorrections
+          ? `${correctedPhrase}[corrected]`
+          : correctedPhrase;
+
+        // Replace first occurrence
+        correctedText = correctedText.replace(issue.phrase, replacement);
+
+        // Track that we've processed this phrase
+        correctedPhrases.add(issue.phrase);
+
+        // Log correction
+        corrections.push({
+          originalPhrase: issue.phrase,
+          correctedPhrase,
+          issueType: issue.type,
+          validationNote: issue.suggestion || '',
+          confidence: issue.confidence
+        });
+      }
+    } catch (error: any) {
+      console.error(`❌ Correction failed for "${issue.phrase}":`, error.message);
+      // Continue with other corrections
+    }
+  }
+
+  return {
+    correctedText,
+    corrections,
+    correctionCount: corrections.length
+  };
+}
+
+/**
+ * Extracts surrounding context for a phrase
+ */
+function extractContext(text: string, phrase: string, lines: number = 2): string {
+  const textLines = text.split('\n');
+  const phraseLineIndex = textLines.findIndex(line => line.includes(phrase));
+
+  if (phraseLineIndex === -1) {
+    // Phrase not found, return just the phrase
+    return phrase;
+  }
+
+  const startIndex = Math.max(0, phraseLineIndex - lines);
+  const endIndex = Math.min(textLines.length, phraseLineIndex + lines + 1);
+
+  return textLines.slice(startIndex, endIndex).join('\n');
+}
+
+/**
+ * Builds targeted correction prompt
+ */
+function buildCorrectionPrompt(
+  issue: ValidationIssue,
+  context: string,
+  glossary: any
+): string {
+  const template = CORRECTION_PROMPT_TEMPLATES[issue.type] || CORRECTION_PROMPT_TEMPLATES.grammar;
+  const guidance = getIssueGuidance(issue, glossary);
+
+  return template
+    .replace('{phrase}', issue.phrase)
+    .replace('{context}', context)
+    .replace('{guidance}', guidance);
+}
+
+/**
+ * Gets issue-specific guidance with glossary hints
+ */
+function getIssueGuidance(issue: ValidationIssue, glossary: any): string {
+  const hints: string[] = [];
+
+  // Add validation suggestion if available
+  if (issue.suggestion) {
+    hints.push(`Validation suggests: ${issue.suggestion}`);
+  }
+
+  // Add glossary hints if relevant
+  if (glossary.acronyms) {
+    const acronymKeys = Object.keys(glossary.acronyms);
+    if (acronymKeys.length > 0) {
+      hints.push(`Known acronyms: ${acronymKeys.slice(0, 8).join(', ')}`);
+    }
+  }
+
+  if (glossary.properNouns && glossary.properNouns.length > 0) {
+    hints.push(`Known names: ${glossary.properNouns.join(', ')}`);
+  }
+
+  // Type-specific guidance
+  if (issue.type === 'grammar') {
+    hints.push('Common handwriting confusions: h/b, s/g, m/n, rn/m, u/v');
+  } else if (issue.type === 'semantics') {
+    hints.push('Check if words form coherent business meaning');
+  }
+
+  return hints.join('\n');
+}
+
+/**
+ * Requests phrase correction via OpenAI
+ */
+async function requestPhraseCorrection(
+  imageBuffer: Buffer,
+  prompt: string
+): Promise<string | null> {
+  try {
+    const base64Image = imageBuffer.toString('base64');
+
+    const response = await openaiForCorrection.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.2,
+      max_tokens: 200,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.'
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            },
+            {
+              type: 'text',
+              text: prompt
+            }
+          ]
+        }
+      ]
+    });
+
+    const corrected = response.choices?.[0]?.message?.content?.trim();
+    return corrected || null;
+  } catch (error: any) {
+    console.error('❌ Correction API call failed:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Formats correction log as markdown
+ */
+export function formatCorrectionLog(corrections: CorrectionLog[]): string {
+  if (corrections.length === 0) {
+    return '';
+  }
+
+  const lines: string[] = [];
+  lines.push('## Corrections Applied');
+  lines.push('');
+  lines.push(`${corrections.length} phrase${corrections.length > 1 ? 's' : ''} corrected:`);
+  lines.push('');
+
+  corrections.forEach((c, i) => {
+    lines.push(`${i + 1}. **"${c.originalPhrase}"** → "${c.correctedPhrase}"`);
+    lines.push(`   - Reason: ${c.issueType}`);
+    if (c.validationNote) {
+      lines.push(`   - Note: ${c.validationNote}`);
+    }
+    lines.push(`   - Confidence: ${(c.confidence * 100).toFixed(0)}%`);
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+/**
+ * Loads correction configuration from handwriting reference
+ */
+export async function getCorrectionConfig(): Promise<CorrectionConfig> {
+  try {
+    const reference = await loadHandwritingReference();
+    const userConfig = (reference as any).ocrCorrection || {};
+
+    return {
+      ...DEFAULT_CORRECTION_CONFIG,
+      ...userConfig
+    };
+  } catch {
+    return DEFAULT_CORRECTION_CONFIG;
+  }
 }

@@ -16,10 +16,12 @@ export async function summarizeText(text: string): Promise<string> {
           content: `You are an expert meeting assistant. Use the following meeting notes to produce a structured summary with 5 sections:
 
 - Summary: 3–5 sentence paragraph on key themes
-- Action Items: bullet list starting with "AI: ..."
+- Action Items: ONLY extract lines that explicitly start with "AI:" in the original notes. These are explicit action items. List them as bullet points. If there are no "AI:" lines in the notes, write "No explicit action items marked."
 - Key Learnings: insights or takeaways
 - Key Decisions: final or important decisions
 - Tags: open-ended hashtags (e.g., #Growth, #Planning)
+
+IMPORTANT: For Action Items, you must ONLY use lines from the original notes that start with "AI:". Do not infer or generate action items from other content. The "AI:" prefix is an explicit marker for action items in the note-taking format.
 
 Keep it clear and concise.`,
         },

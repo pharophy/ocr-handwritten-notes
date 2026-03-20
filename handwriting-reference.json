@@ -35,11 +35,15 @@
       "NA": "North America",
       "AioAI": "All-in on AI",
       "PwC": "Company name",
-      "SAP": "Company name"
+      "SAP": "Company name",
+      "AI:": "Action item",
+      "AI": "Artificial Inelligence",
+      "w/": "with",
+      "f/u": "follow up",
+      "f2f": "face to face"
     },
     "properNouns": [
       "Pepsi",
-      "Pepsico",
       "Canada",
       "Cosine",
       "Course",
@@ -70,5 +74,12 @@
     "confidenceThreshold": 0.7,
     "skipSummarizationThreshold": 0.5,
     "appendReportOnIssues": true
+  },
+  "ocrCorrection": {
+    "enabled": true,
+    "correctCriticalOnly": true,
+    "tagCorrections": true,
+    "maxCorrectionsPerImage": 10,
+    "minIssueConfidence": 0.8
   }
 }

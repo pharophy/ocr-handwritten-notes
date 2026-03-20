@@ -67,7 +67,6 @@ Key principles:
 - Do not add interpretation, structure, or formatting beyond what is clearly visible
 
 IMPORTANT - Common handwriting confusion patterns to watch for:
-- "Pepsico" vs "Pepsi" - use full company name "Pepsico" when context is corporate/business
 - "home" vs "book" - in context of living/vacation, likely "home"
 - "sign" vs "issues" - in context of contracts/agreements, likely "sign"
 - "upfront" vs "customer" - in context of payments/money, likely "upfront"

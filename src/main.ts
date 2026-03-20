@@ -3,7 +3,7 @@ import path from 'path';
 import { processHandwrittenImage } from './ocr';
 import { summarizeText } from './summarize';
 import { getAllImageFiles, fileExists } from './utils';
-import { validateOCROutput, formatValidationReport, getValidationConfig, type ValidationReport } from './ocrValidator';
+import { validateOCROutput, formatValidationReport, getValidationConfig, correctOCRIssues, getCorrectionConfig, type ValidationReport } from './ocrValidator';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -44,8 +44,35 @@ async function run() {
         }
       }
 
+      // Apply multi-pass correction if validation found critical issues
+      let finalText = ocrText;
+      if (validationReport?.hasIssues) {
+        const correctionConfig = await getCorrectionConfig();
+
+        if (correctionConfig.enabled) {
+          const correctionResult = await correctOCRIssues(
+            ocrText,
+            buffer,
+            validationReport,
+            correctionConfig
+          );
+
+          finalText = correctionResult.correctedText;
+
+          // Log corrections
+          if (correctionResult.correctionCount > 0) {
+            console.log(`  🔧 ${path.basename(imagePath)}: ${correctionResult.correctionCount} corrections applied`);
+          }
+
+          // Append correction log to validation report
+          if (correctionResult.corrections.length > 0 && validationConfig.appendReportOnIssues) {
+            validationReport.correctionLog = correctionResult.corrections;
+          }
+        }
+      }
+
       // Build OCR output with optional validation report
-      let ocrOutput = `[[${path.basename(summaryFilePath)}]] | [[${path.basename(imagePath)}]]\n${ocrText}`;
+      let ocrOutput = `[[${path.basename(summaryFilePath)}]] | [[${path.basename(imagePath)}]]\n${finalText}`;
 
       if (validationReport?.hasIssues && validationConfig.appendReportOnIssues) {
         ocrOutput += '\n\n---\n\n## OCR Validation Report\n\n';
