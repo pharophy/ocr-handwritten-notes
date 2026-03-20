@@ -40,7 +40,13 @@
       "AI": "Artificial Inelligence",
       "w/": "with",
       "f/u": "follow up",
-      "f2f": "face to face"
+      "f2f": "face to face",
+      "KAMs": "Key Account Managers",
+      "CAs": "Claims Analysts",
+      "Joule": "SAP's AI assistant", 
+      "ITCM": "Software product",
+      "RGO": "Software product",
+      "ORA": "Order reliability agent, software product"
     },
     "properNouns": [
       "Pepsi",
