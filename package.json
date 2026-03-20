@@ -2,17 +2,26 @@
   "name": "handwritten-ocr-cli",
   "type": "module",
   "scripts": {
-    "start": "npx tsx src/main.ts"
+    "start": "npx tsx src/main.ts",
+    "convert": "npx tsx src/convert-single.ts",
+    "aggregate-actions": "npx tsx src/aggregate-actions.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@vitest/ui": "^4.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@types/node": "^22.14.1",
     "dotenv": "^16.5.0",
     "openai": "^4.96.0",
+    "openspec": "^0.0.0",
     "sharp": "^0.34.2"
   }
 }
