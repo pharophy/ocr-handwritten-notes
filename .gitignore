@@ -1,0 +1,19 @@
+# Environment variables (contains API keys)
+.env
+.env.local
+
+# OS files
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Test artifacts
+test-images/
+
+# Claude Code
+.claude/
+
+# Build outputs
+dist/
+build/
