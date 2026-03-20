@@ -4,6 +4,7 @@
   "scripts": {
     "start": "npx tsx src/main.ts",
     "convert": "npx tsx src/convert-single.ts",
+    "aggregate-actions": "npx tsx src/aggregate-actions.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
