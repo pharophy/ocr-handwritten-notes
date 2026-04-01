@@ -91,22 +91,24 @@
 - [ ] 11.6 Test model mapping per operation type (different models for OCR vs summarization)
 - [ ] 11.7 Verify configuration logging shows provider type and model selections
 
+Note: Testing tasks should be performed by user after documentation is complete.
+
 ## 12. Documentation
 
-- [ ] 12.1 Update README.md with AI provider configuration section
-- [ ] 12.2 Add Prerequisites section to README documenting HAI CLI installation requirement for SAP employees (note: Cline IDE extension is optional, not required)
-- [ ] 12.3 Add examples for OpenAI direct configuration (for non-SAP users)
-- [ ] 12.4 Add examples for HAI proxy with Claude configuration (recommended for SAP employees)
-- [ ] 12.5 Add examples for HAI proxy with OpenAI configuration
-- [ ] 12.6 Document model selection recommendations (Claude Sonnet for OCR, Haiku for summarization)
-- [ ] 12.7 Add troubleshooting guide for HAI proxy setup including auto-start behavior
-- [ ] 12.8 Document how to disable HAI proxy auto-start if desired (HAI_AUTO_START=false)
-- [ ] 12.9 Update `.env.example` with new AI provider environment variables including HAI_AUTO_START
-- [ ] 12.10 Add note that HAI proxy will auto-start in headless mode and run in background
+- [x] 12.1 Update README.md with AI provider configuration section
+- [x] 12.2 Add Prerequisites section to README documenting HAI CLI installation requirement for SAP employees (note: Cline IDE extension is optional, not required)
+- [x] 12.3 Add examples for OpenAI direct configuration (for non-SAP users)
+- [x] 12.4 Add examples for HAI proxy with Claude configuration (recommended for SAP employees)
+- [x] 12.5 Add examples for HAI proxy with OpenAI configuration
+- [x] 12.6 Document model selection recommendations (Claude Sonnet for OCR, Haiku for summarization)
+- [x] 12.7 Add troubleshooting guide for HAI proxy setup including auto-start behavior
+- [x] 12.8 Document how to disable HAI proxy auto-start if desired (HAI_AUTO_START=false)
+- [x] 12.9 Update `.env.example` with new AI provider environment variables including HAI_AUTO_START
+- [x] 12.10 Add note that HAI proxy will auto-start in headless mode and run in background
 
 ## 13. Configuration Examples
 
-- [ ] 13.1 Create `handwriting-reference.json` example with `aiProvider` configuration for OpenAI
-- [ ] 13.2 Create example configuration for HAI proxy with Claude
-- [ ] 13.3 Create example configuration for HAI proxy with OpenAI
-- [ ] 13.4 Document configuration hierarchy and precedence rules
+- [x] 13.1 Create `handwriting-reference.json` example with `aiProvider` configuration for OpenAI
+- [x] 13.2 Create example configuration for HAI proxy with Claude
+- [x] 13.3 Create example configuration for HAI proxy with OpenAI
+- [x] 13.4 Document configuration hierarchy and precedence rules

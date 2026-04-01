@@ -20,7 +20,97 @@ Automated OCR tool for converting handwritten notes to markdown with AI-powered 
 npm install
 ```
 
-### Step 2: Configure Your OpenAI API Key
+### Step 2: Configure AI Provider
+
+This tool supports multiple AI providers for OCR and summarization:
+
+#### Option A: HAI Proxy (Recommended for SAP Employees)
+
+✅ **Zero cost** - Uses corporate AI infrastructure  
+✅ **Better OCR** - Claude 3.5 Sonnet excels at handwriting  
+✅ **Compliant** - Meets SAP AI usage policies  
+✅ **Auto-start** - Proxy starts automatically when needed  
+
+**Prerequisites:**
+1. Install HAI CLI: [Installation Guide](https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/)
+2. Authenticate: `hai auth login`
+
+**Configuration:**
+No configuration needed! The system will:
+- Auto-detect HAI proxy running on port 6655
+- Auto-start HAI proxy if not running
+- Use Claude 3.5 Sonnet for OCR by default
+
+**Optional:** Configure in `handwriting-reference.json`:
+```json
+{
+  "aiProvider": {
+    "type": "hai-claude",
+    "autoStartProxy": true,
+    "models": {
+      "ocr": "anthropic--claude-4.5-sonnet",
+      "summarization": "anthropic--claude-4.5-haiku",
+      "validation": "anthropic--claude-4.5-haiku"
+    }
+  }
+}
+```
+
+**Environment Variables:**
+```env
+AI_PROVIDER=hai-claude
+HAI_AUTO_START=true                # Default: true
+HAI_PROXY_PORT=6655               # Default: 6655
+ANTHROPIC_BASE_URL=http://localhost:6655/anthropic/
+```
+
+#### Option B: OpenAI Direct (For Non-SAP Users)
+
+**Configuration:**
+Create `.env` file:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+AI_PROVIDER=openai  # Optional, will auto-detect from API key
+```
+
+Get your API key from: https://platform.openai.com/api-keys
+
+**Model Selection (Optional):**
+```env
+AI_MODEL_OCR=gpt-4o              # Default
+AI_MODEL_SUMMARIZATION=gpt-4o-mini   # Default
+AI_MODEL_VALIDATION=gpt-4o-mini      # Default
+```
+
+#### Option C: HAI Proxy with OpenAI
+
+Use OpenAI models through HAI proxy instead of Claude:
+
+```env
+AI_PROVIDER=hai-openai
+# HAI proxy will be auto-started
+```
+
+### Troubleshooting AI Provider
+
+**"HAI CLI not found in PATH"**
+- Install HAI CLI: [Installation Guide](https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/)
+- Restart your terminal after installation
+
+**"HAI proxy is not running"**
+- Auto-start is enabled by default
+- Manual start: `hai proxy start`
+- Check status: `lsof -i :6655`
+- Disable auto-start: `HAI_AUTO_START=false` in `.env`
+
+**"OPENAI_API_KEY is required"**
+- For OpenAI direct, set `OPENAI_API_KEY` in `.env`
+- For HAI proxy, the key is managed automatically
+
+### Step 3: Configure Your OpenAI API Key
+
+**(Skip this if using HAI Proxy)**
 
 Create or edit `.env` file in the root directory:
 
@@ -30,7 +120,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 Get your API key from: https://platform.openai.com/api-keys
 
-### Step 3: Configure Monitored Folders
+### Step 4: Configure Monitored Folders
 
 Edit [src/main.ts](src/main.ts) to set which folders contain your handwritten note images:
 
@@ -48,7 +138,7 @@ const MONITORED_FOLDERS = [
 ];
 ```
 
-### Step 4: (Optional but Recommended) Set Up Handwriting Reference
+### Step 5: (Optional but Recommended) Set Up Handwriting Reference
 
 To improve OCR accuracy for your specific handwriting, provide a reference sample.
 
@@ -111,7 +201,7 @@ HANDWRITING_REFERENCE_ENABLED=false
 
 The OCR will work normally without personalized handwriting reference.
 
-### Step 5: Run the Tool
+### Step 6: Run the Tool
 
 ```bash
 npm start
