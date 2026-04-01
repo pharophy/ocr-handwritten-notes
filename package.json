@@ -19,6 +19,7 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@types/node": "^22.14.1",
     "dotenv": "^16.5.0",
     "openai": "^4.96.0",

@@ -1,31 +1,31 @@
 ## 1. Setup and Dependencies
 
-- [ ] 1.1 Install `@anthropic-ai/sdk` package to package.json
-- [ ] 1.2 Verify existing `openai` package version supports required features
-- [ ] 1.3 Create `src/aiProvider.ts` file for provider abstraction interface
+- [x] 1.1 Install `@anthropic-ai/sdk` package to package.json
+- [x] 1.2 Verify existing `openai` package version supports required features
+- [x] 1.3 Create `src/aiProvider.ts` file for provider abstraction interface
 
 ## 2. Core AI Provider Abstraction
 
-- [ ] 2.1 Define `AIProvider` interface with methods: `generateVisionCompletion()`, `generateTextCompletion()`
-- [ ] 2.2 Define `AIProviderConfig` interface for provider configuration structure
-- [ ] 2.3 Define `AIMessage`, `AIResponse` types for normalized request/response formats
-- [ ] 2.4 Create `ProviderType` enum with values: `OPENAI`, `HAI_CLAUDE`, `HAI_OPENAI`
+- [x] 2.1 Define `AIProvider` interface with methods: `generateVisionCompletion()`, `generateTextCompletion()`
+- [x] 2.2 Define `AIProviderConfig` interface for provider configuration structure
+- [x] 2.3 Define `AIMessage`, `AIResponse` types for normalized request/response formats
+- [x] 2.4 Create `ProviderType` enum with values: `OPENAI`, `HAI_CLAUDE`, `HAI_OPENAI`
 
 ## 3. OpenAI Provider Adapter
 
-- [ ] 3.1 Create `OpenAIProvider` class implementing `AIProvider` interface
-- [ ] 3.2 Implement `generateVisionCompletion()` using OpenAI vision API with base64 images
-- [ ] 3.3 Implement `generateTextCompletion()` using OpenAI chat completions API
-- [ ] 3.4 Add response normalization to convert OpenAI responses to common format
-- [ ] 3.5 Support both direct OpenAI and HAI proxy base URLs
+- [x] 3.1 Create `OpenAIProvider` class implementing `AIProvider` interface
+- [x] 3.2 Implement `generateVisionCompletion()` using OpenAI vision API with base64 images
+- [x] 3.3 Implement `generateTextCompletion()` using OpenAI chat completions API
+- [x] 3.4 Add response normalization to convert OpenAI responses to common format
+- [x] 3.5 Support both direct OpenAI and HAI proxy base URLs
 
 ## 4. Claude Provider Adapter
 
-- [ ] 4.1 Create `ClaudeProvider` class implementing `AIProvider` interface
-- [ ] 4.2 Implement `generateVisionCompletion()` using Anthropic messages API with image content blocks
-- [ ] 4.3 Implement `generateTextCompletion()` using Anthropic messages API
-- [ ] 4.4 Add response normalization to convert Anthropic responses to common format
-- [ ] 4.5 Handle HAI proxy specific model naming (e.g., `anthropic--claude-4.5-sonnet`)
+- [x] 4.1 Create `ClaudeProvider` class implementing `AIProvider` interface
+- [x] 4.2 Implement `generateVisionCompletion()` using Anthropic messages API with image content blocks
+- [x] 4.3 Implement `generateTextCompletion()` using Anthropic messages API
+- [x] 4.4 Add response normalization to convert Anthropic responses to common format
+- [x] 4.5 Handle HAI proxy specific model naming (e.g., `anthropic--claude-4.5-sonnet`)
 
 ## 5. Configuration System
 
