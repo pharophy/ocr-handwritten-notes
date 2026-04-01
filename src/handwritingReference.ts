@@ -1,5 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { execSync } from 'child_process';
+import { createConnection } from 'net';
+import { ProviderType, ModelMapping, AIProviderConfig } from './aiProvider';
 
 export interface DomainGlossary {
   acronyms?: Record<string, string>;
@@ -29,6 +32,11 @@ export interface HandwritingReferenceConfig {
     tagCorrections?: boolean;
     maxCorrectionsPerImage?: number;
     minIssueConfidence?: number;
+  };
+  aiProvider?: {
+    type?: 'openai' | 'hai-claude' | 'hai-openai';
+    autoStartProxy?: boolean;
+    models?: ModelMapping;
   };
 }
 
@@ -254,3 +262,271 @@ export function formatGlossaryContext(glossary: DomainGlossary): string {
 
   return sections.join('\n');
 }
+
+// ============================================================================
+// AI Provider Configuration
+// ============================================================================
+
+/**
+ * Check if HAI proxy is running on specified port
+ */
+async function checkHAIProxyRunning(port: number = 6655): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ port, host: 'localhost' }, () => {
+      socket.end();
+      resolve(true);
+    });
+
+    socket.on('error', () => {
+      resolve(false);
+    });
+
+    socket.setTimeout(1000, () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Start HAI proxy in headless mode
+ */
+async function startHAIProxy(): Promise<void> {
+  try {
+    console.log('🔌 Starting HAI proxy in headless mode...');
+
+    // Start HAI proxy in background
+    execSync('hai proxy start --headless &', {
+      stdio: 'inherit',
+      shell: '/bin/zsh'
+    });
+
+    // Wait 2 seconds for proxy to initialize
+    execSync('sleep 2', { stdio: 'inherit' });
+
+    // Verify it's running
+    const isRunning = await checkHAIProxyRunning();
+    if (isRunning) {
+      console.log('✅ HAI proxy started successfully');
+    } else {
+      throw new Error('HAI proxy started but not accepting connections on port 6655');
+    }
+  } catch (error: any) {
+    if (error.message?.includes('command not found') || error.message?.includes('hai')) {
+      throw new Error(
+        'HAI CLI not found in PATH. Please install it first.\n' +
+        'See: https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/'
+      );
+    }
+    throw error;
+  }
+}
+
+/**
+ * Load AI provider configuration with hierarchy:
+ * 1. Environment variables (highest priority)
+ * 2. JSON config file
+ * 3. Auto-detect HAI proxy
+ * 4. Fallback to OpenAI direct
+ */
+export async function loadAIProviderConfig(
+  referenceConfig?: HandwritingReferenceConfig
+): Promise<AIProviderConfig> {
+  const haiProxyPort = parseInt(process.env.HAI_PROXY_PORT || '6655', 10);
+
+  // 1. Check environment variables first
+  const envProvider = process.env.AI_PROVIDER as 'openai' | 'hai-claude' | 'hai-openai' | undefined;
+
+  if (envProvider) {
+    console.log(`🔧 Using AI provider from environment: ${envProvider}`);
+
+    const config: AIProviderConfig = {
+      type: envProvider === 'openai' ? ProviderType.OPENAI :
+            envProvider === 'hai-claude' ? ProviderType.HAI_CLAUDE :
+            ProviderType.HAI_OPENAI,
+      apiKey: getAPIKey(envProvider),
+      baseURL: getBaseURL(envProvider),
+      models: getModelMapping(envProvider),
+      autoStartProxy: getAutoStartProxy(),
+    };
+
+    // Handle HAI proxy requirements
+    if (envProvider.startsWith('hai-')) {
+      await ensureHAIProxyRunning(config, haiProxyPort);
+    }
+
+    logProviderConfig(config);
+    return config;
+  }
+
+  // 2. Check JSON config
+  if (referenceConfig?.aiProvider?.type) {
+    const jsonType = referenceConfig.aiProvider.type;
+    console.log(`📄 Using AI provider from JSON config: ${jsonType}`);
+
+    const config: AIProviderConfig = {
+      type: jsonType === 'openai' ? ProviderType.OPENAI :
+            jsonType === 'hai-claude' ? ProviderType.HAI_CLAUDE :
+            ProviderType.HAI_OPENAI,
+      apiKey: getAPIKey(jsonType),
+      baseURL: getBaseURL(jsonType),
+      models: referenceConfig.aiProvider.models || getModelMapping(jsonType),
+      autoStartProxy: referenceConfig.aiProvider.autoStartProxy ?? true,
+    };
+
+    // Handle HAI proxy requirements
+    if (jsonType.startsWith('hai-')) {
+      await ensureHAIProxyRunning(config, haiProxyPort);
+    }
+
+    logProviderConfig(config);
+    return config;
+  }
+
+  // 3. Auto-detect: Check if HAI proxy is running
+  const haiProxyRunning = await checkHAIProxyRunning(haiProxyPort);
+  const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+
+  if (haiProxyRunning && !hasOpenAIKey) {
+    console.log('🔍 Auto-detected HAI proxy running, using Claude provider');
+
+    const config: AIProviderConfig = {
+      type: ProviderType.HAI_CLAUDE,
+      apiKey: process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY,
+      baseURL: process.env.ANTHROPIC_BASE_URL || `http://localhost:${haiProxyPort}/anthropic/`,
+      models: getModelMapping('hai-claude'),
+      autoStartProxy: true,
+    };
+
+    logProviderConfig(config);
+    return config;
+  }
+
+  // 4. Fallback to OpenAI direct
+  if (!hasOpenAIKey) {
+    throw new Error(
+      'No AI provider configured. Please either:\n' +
+      '1. Set OPENAI_API_KEY environment variable, or\n' +
+      '2. Install and start HAI proxy with: hai proxy start, or\n' +
+      '3. Configure AI provider in handwriting-reference.json'
+    );
+  }
+
+  console.log('💼 Using OpenAI direct provider (fallback)');
+
+  const config: AIProviderConfig = {
+    type: ProviderType.OPENAI,
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: undefined,
+    models: getModelMapping('openai'),
+    autoStartProxy: false,
+  };
+
+  logProviderConfig(config);
+  return config;
+}
+
+/**
+ * Ensure HAI proxy is running, auto-start if needed
+ */
+async function ensureHAIProxyRunning(config: AIProviderConfig, port: number): Promise<void> {
+  const isRunning = await checkHAIProxyRunning(port);
+
+  if (!isRunning) {
+    const autoStart = config.autoStartProxy ?? (process.env.HAI_AUTO_START !== 'false');
+
+    if (!autoStart) {
+      throw new Error(
+        `HAI proxy is not running on port ${port}.\n` +
+        'Please start it manually with: hai proxy start'
+      );
+    }
+
+    // Auto-start HAI proxy
+    await startHAIProxy();
+  }
+}
+
+/**
+ * Get API key based on provider type
+ */
+function getAPIKey(providerType: string): string | undefined {
+  if (providerType === 'openai' || providerType === 'hai-openai') {
+    return process.env.OPENAI_API_KEY;
+  }
+
+  if (providerType === 'hai-claude') {
+    return process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY;
+  }
+
+  return undefined;
+}
+
+/**
+ * Get base URL based on provider type
+ */
+function getBaseURL(providerType: string): string | undefined {
+  const haiProxyPort = parseInt(process.env.HAI_PROXY_PORT || '6655', 10);
+
+  if (providerType === 'hai-claude') {
+    return process.env.ANTHROPIC_BASE_URL || `http://localhost:${haiProxyPort}/anthropic/`;
+  }
+
+  if (providerType === 'hai-openai') {
+    return `http://localhost:${haiProxyPort}/openai/v1`;
+  }
+
+  return undefined; // OpenAI direct uses default
+}
+
+/**
+ * Get model mapping from environment variables or defaults
+ */
+function getModelMapping(providerType: string): ModelMapping {
+  const envModels: ModelMapping = {
+    ocr: process.env.AI_MODEL_OCR,
+    summarization: process.env.AI_MODEL_SUMMARIZATION,
+    validation: process.env.AI_MODEL_VALIDATION,
+  };
+
+  // Remove undefined values
+  Object.keys(envModels).forEach(key => {
+    if (envModels[key as keyof ModelMapping] === undefined) {
+      delete envModels[key as keyof ModelMapping];
+    }
+  });
+
+  // If env vars provided any models, use them
+  if (Object.keys(envModels).length > 0) {
+    return envModels;
+  }
+
+  // Otherwise use provider-specific defaults (will be applied by provider class)
+  return {};
+}
+
+/**
+ * Get auto-start proxy preference
+ */
+function getAutoStartProxy(): boolean {
+  return process.env.HAI_AUTO_START !== 'false';
+}
+
+/**
+ * Log provider configuration (with sensitive data redacted)
+ */
+function logProviderConfig(config: AIProviderConfig): void {
+  console.log('\n📋 AI Provider Configuration:');
+  console.log(`  Provider: ${config.type}`);
+  console.log(`  API Key: ${config.apiKey ? config.apiKey.substring(0, 8) + '...' : 'not set'}`);
+  console.log(`  Base URL: ${config.baseURL || 'default'}`);
+
+  if (config.models && Object.keys(config.models).length > 0) {
+    console.log('  Models:');
+    if (config.models.ocr) console.log(`    OCR: ${config.models.ocr}`);
+    if (config.models.summarization) console.log(`    Summarization: ${config.models.summarization}`);
+    if (config.models.validation) console.log(`    Validation: ${config.models.validation}`);
+  }
+  console.log('');
+}
+

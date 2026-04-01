@@ -87,5 +87,14 @@
     "tagCorrections": true,
     "maxCorrectionsPerImage": 10,
     "minIssueConfidence": 0.8
+  },
+  "aiProvider": {
+    "type": "openai",
+    "autoStartProxy": true,
+    "models": {
+      "ocr": "gpt-4o",
+      "summarization": "gpt-4o-mini",
+      "validation": "gpt-4o-mini"
+    }
   }
 }

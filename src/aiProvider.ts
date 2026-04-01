@@ -297,4 +297,52 @@ export class ClaudeProvider implements AIProvider {
   }
 }
 
+// ============================================================================
+// Provider Factory
+// ============================================================================
+
+/**
+ * Create an AI provider based on configuration
+ * This is the main entry point for creating providers
+ */
+export function createAIProvider(config: AIProviderConfig): AIProvider {
+  // Validate required configuration
+  if (!config.type) {
+    throw new Error('AI provider type is required');
+  }
+
+  // Validate API key for providers that need it
+  if (config.type === ProviderType.OPENAI || config.type === ProviderType.HAI_OPENAI) {
+    if (!config.apiKey) {
+      throw new Error(
+        'OPENAI_API_KEY is required for OpenAI provider.\n' +
+        'Set it in your .env file or environment variables.'
+      );
+    }
+  }
+
+  if (config.type === ProviderType.HAI_CLAUDE) {
+    if (!config.apiKey) {
+      throw new Error(
+        'ANTHROPIC_AUTH_TOKEN or HAI_API_KEY is required for HAI Claude provider.\n' +
+        'These are typically set automatically when HAI proxy is configured.'
+      );
+    }
+  }
+
+  // Create appropriate provider
+  switch (config.type) {
+    case ProviderType.OPENAI:
+    case ProviderType.HAI_OPENAI:
+      return new OpenAIProvider(config);
+
+    case ProviderType.HAI_CLAUDE:
+      return new ClaudeProvider(config);
+
+    default:
+      throw new Error(`Unsupported provider type: ${config.type}`);
+  }
+}
+
+
 

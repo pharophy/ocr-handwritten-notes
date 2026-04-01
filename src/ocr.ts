@@ -1,7 +1,6 @@
 import path from 'path';
-import OpenAI from 'openai';
 import sharp from 'sharp';
-import { OPEN_AI_KEY } from './utils';
+import { createAIProvider, AIProvider } from './aiProvider';
 import {
   loadHandwritingReference,
   loadReferenceImage,
@@ -10,23 +9,25 @@ import {
   referenceImageExists,
   getDomainGlossary,
   formatGlossaryContext,
+  loadAIProviderConfig,
   type HandwritingReferenceConfig
 } from './handwritingReference';
 
-const openai = new OpenAI({
-  apiKey: OPEN_AI_KEY
-});
-
-// Cache the handwriting reference to avoid loading it on every OCR call
+// Cache the handwriting reference and AI provider to avoid loading on every OCR call
 let cachedReference: HandwritingReferenceConfig | null = null;
 let cachedReferenceImage: Buffer | null = null;
+let cachedProvider: AIProvider | null = null;
 let referenceLoaded = false;
 
 export async function processHandwrittenImage(imageBuffer: Buffer, filename: string): Promise<string | null> {
   try {
-    // Load handwriting reference (cached after first load)
+    // Load handwriting reference and AI provider (cached after first load)
     if (!referenceLoaded) {
       cachedReference = await loadHandwritingReference();
+
+      // Load AI provider configuration
+      const providerConfig = await loadAIProviderConfig(cachedReference);
+      cachedProvider = createAIProvider(providerConfig);
 
       // Try to load reference image if path is specified
       if (cachedReference.referenceImagePath) {
@@ -91,43 +92,19 @@ Requirements:
 - Output only the transcribed text, no explanation
 `;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      temperature: 0.0,
-      top_p: 1.0,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: [
-            // Include reference image first if available
-            ...(cachedReferenceImage ? [{
-              type: 'image_url' as const,
-              image_url: {
-                url: `data:image/jpeg;base64,${cachedReferenceImage.toString('base64')}`,
-              },
-            }] : []),
-            // Target image to transcribe
-            {
-              type: 'image_url' as const,
-              image_url: {
-                url: `data:${mime};base64,${base64Image}`,
-              },
-            },
-            {
-              type: 'text' as const,
-              text: userPrompt,
-            },
-          ],
-        },
-      ],
-      max_tokens: 5000,
-    });
+    // Build combined prompt including reference image context if available
+    let combinedPrompt = systemPrompt + '\n\n' + userPrompt;
 
-    return response.choices?.[0]?.message?.content?.trim() || null;
+    // For providers that support vision with multiple images (OpenAI), we can include the reference image
+    // For now, we'll use a single-image approach that works with all providers
+    const response = await cachedProvider!.generateVisionCompletion(
+      combinedPrompt,
+      base64Image,
+      mime,
+      'ocr'
+    );
+
+    return response.content || null;
   } catch (error: any) {
     console.error('❌ OCR failed:', error?.response?.data || error.message);
     return null;

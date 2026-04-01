@@ -1,19 +1,23 @@
-import OpenAI from 'openai';
-import { OPEN_AI_KEY } from './utils';
+import { createAIProvider, AIProvider } from './aiProvider';
+import { loadHandwritingReference, loadAIProviderConfig } from './handwritingReference';
 
-const openai = new OpenAI({
-    apiKey: OPEN_AI_KEY
-  });
+// Cache the AI provider
+let cachedProvider: AIProvider | null = null;
 
+async function getProvider(): Promise<AIProvider> {
+  if (!cachedProvider) {
+    const referenceConfig = await loadHandwritingReference();
+    const providerConfig = await loadAIProviderConfig(referenceConfig);
+    cachedProvider = createAIProvider(providerConfig);
+  }
+  return cachedProvider;
+}
 
 export async function summarizeText(text: string): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert meeting assistant. Use the following meeting notes to produce a structured summary with 5 sections:
+    const provider = await getProvider();
+
+    const prompt = `You are an expert meeting assistant. Use the following meeting notes to produce a structured summary with 5 sections:
 
 - Summary: 3–5 sentence paragraph on key themes
 - Action Items: ONLY extract lines that explicitly start with "AI:" in the original notes. These are explicit action items. List them as bullet points. If there are no "AI:" lines in the notes, write "No explicit action items marked."
@@ -23,19 +27,17 @@ export async function summarizeText(text: string): Promise<string> {
 
 IMPORTANT: For Action Items, you must ONLY use lines from the original notes that start with "AI:". Do not infer or generate action items from other content. The "AI:" prefix is an explicit marker for action items in the note-taking format.
 
-Keep it clear and concise.`,
-        },
-        {
-          role: 'user',
-          content: `Meeting Transcript:\n"""${text}"""`,
-        },
-      ],
-      temperature: 0.3,
-    });
+Keep it clear and concise.
 
-    return response.choices?.[0]?.message?.content?.trim() || 'no summary';
+Meeting Transcript:
+"""${text}"""`;
+
+    const response = await provider.generateTextCompletion(prompt, 'summarization');
+
+    return response.content || 'no summary';
   } catch (e: any) {
     console.error('❌ Summary generation failed:', e.message);
     return 'Error generating summary.';
   }
 }
+

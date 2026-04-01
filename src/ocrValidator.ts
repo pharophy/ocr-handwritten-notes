@@ -1,6 +1,5 @@
-import OpenAI from 'openai';
-import { OPEN_AI_KEY } from './utils';
-import { loadHandwritingReference, type HandwritingReferenceConfig } from './handwritingReference';
+import { createAIProvider, AIProvider } from './aiProvider';
+import { loadHandwritingReference, loadAIProviderConfig, type HandwritingReferenceConfig } from './handwritingReference';
 
 export interface ValidationIssue {
   type: 'grammar' | 'semantics' | 'incomplete' | 'encoding';
@@ -87,9 +86,17 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
   "summary": "Found 1 critical issue affecting comprehension."
 }`;
 
-const openai = new OpenAI({
-  apiKey: OPEN_AI_KEY
-});
+// Cache the AI provider
+let cachedProvider: AIProvider | null = null;
+
+async function getProvider(): Promise<AIProvider> {
+  if (!cachedProvider) {
+    const referenceConfig = await loadHandwritingReference();
+    const providerConfig = await loadAIProviderConfig(referenceConfig);
+    cachedProvider = createAIProvider(providerConfig);
+  }
+  return cachedProvider;
+}
 
 /**
  * Validate OCR output quality using AI analysis
@@ -113,23 +120,21 @@ export async function validateOCROutput(
   }
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: VALIDATION_SYSTEM_PROMPT
-        },
-        {
-          role: 'user',
-          content: `Analyze this OCR transcription for quality issues:\n\n"""\n${ocrText}\n"""\n\nReturn your analysis as a JSON object.`
-        }
-      ]
-    });
+    const provider = await getProvider();
 
-    const content = response.choices?.[0]?.message?.content;
+    const prompt = `${VALIDATION_SYSTEM_PROMPT}
+
+Analyze this OCR transcription for quality issues:
+
+"""
+${ocrText}
+"""
+
+Return your analysis as a JSON object.`;
+
+    const response = await provider.generateTextCompletion(prompt, 'validation');
+
+    const content = response.content;
     if (!content) {
       console.warn('⚠️  Validation returned empty response');
       return createDefaultReport();

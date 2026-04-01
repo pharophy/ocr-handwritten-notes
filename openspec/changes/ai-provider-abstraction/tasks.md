@@ -29,55 +29,55 @@
 
 ## 5. Configuration System
 
-- [ ] 5.1 Extend `handwriting-reference.json` schema with `aiProvider` section including `autoStartProxy` option
-- [ ] 5.2 Add configuration loading in `src/handwritingReference.ts` for AI provider settings
-- [ ] 5.3 Implement configuration hierarchy: env vars → JSON → auto-detect → fallback
-- [ ] 5.4 Add HAI proxy detection by checking port 6655 accessibility using `net.createConnection()`
-- [ ] 5.5 Implement model mapping configuration for operation types (ocr, summarization, validation)
-- [ ] 5.6 Add HAI proxy auto-start function using `execSync('hai proxy start --headless &', { stdio: 'inherit', shell: '/bin/zsh' })`
-- [ ] 5.7 Implement 2-second wait after starting HAI proxy using `execSync('sleep 2')`
-- [ ] 5.8 Add verification that port 6655 is accepting connections after HAI proxy start
-- [ ] 5.9 Add error handling for HAI CLI not found in PATH with message pointing to https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/
-- [ ] 5.10 Support `HAI_AUTO_START` environment variable to enable/disable auto-start (default: true)
+- [x] 5.1 Extend `handwriting-reference.json` schema with `aiProvider` section including `autoStartProxy` option
+- [x] 5.2 Add configuration loading in `src/handwritingReference.ts` for AI provider settings
+- [x] 5.3 Implement configuration hierarchy: env vars → JSON → auto-detect → fallback
+- [x] 5.4 Add HAI proxy detection by checking port 6655 accessibility using `net.createConnection()`
+- [x] 5.5 Implement model mapping configuration for operation types (ocr, summarization, validation)
+- [x] 5.6 Add HAI proxy auto-start function using `execSync('hai proxy start --headless &', { stdio: 'inherit', shell: '/bin/zsh' })`
+- [x] 5.7 Implement 2-second wait after starting HAI proxy using `execSync('sleep 2')`
+- [x] 5.8 Add verification that port 6655 is accepting connections after HAI proxy start
+- [x] 5.9 Add error handling for HAI CLI not found in PATH with message pointing to https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/
+- [x] 5.10 Support `HAI_AUTO_START` environment variable to enable/disable auto-start (default: true)
 
 ## 6. Provider Factory
 
-- [ ] 6.1 Create `createAIProvider()` factory function in `src/aiProvider.ts`
-- [ ] 6.2 Implement provider selection logic based on configuration
-- [ ] 6.3 Add validation for required credentials per provider type
-- [ ] 6.4 Add error handling for missing configuration with actionable messages
-- [ ] 6.5 Add configuration logging (with sensitive data redaction)
+- [x] 6.1 Create `createAIProvider()` factory function in `src/aiProvider.ts`
+- [x] 6.2 Implement provider selection logic based on configuration
+- [x] 6.3 Add validation for required credentials per provider type
+- [x] 6.4 Add error handling for missing configuration with actionable messages
+- [x] 6.5 Add configuration logging (with sensitive data redaction)
 
 ## 7. Environment Variables Support
 
-- [ ] 7.1 Document and support `AI_PROVIDER` environment variable for provider type selection
-- [ ] 7.2 Support `AI_MODEL_OCR`, `AI_MODEL_SUMMARIZATION`, `AI_MODEL_VALIDATION` for model mapping
-- [ ] 7.3 Support `ANTHROPIC_BASE_URL` for HAI proxy base URL configuration
-- [ ] 7.4 Support `ANTHROPIC_AUTH_TOKEN` or `HAI_API_KEY` for HAI proxy authentication
-- [ ] 7.5 Support `HAI_PROXY_PORT` for custom HAI proxy port
-- [ ] 7.6 Maintain backward compatibility with existing `OPENAI_API_KEY` and `OPENAI_MODEL_*` variables
+- [x] 7.1 Document and support `AI_PROVIDER` environment variable for provider type selection
+- [x] 7.2 Support `AI_MODEL_OCR`, `AI_MODEL_SUMMARIZATION`, `AI_MODEL_VALIDATION` for model mapping
+- [x] 7.3 Support `ANTHROPIC_BASE_URL` for HAI proxy base URL configuration
+- [x] 7.4 Support `ANTHROPIC_AUTH_TOKEN` or `HAI_API_KEY` for HAI proxy authentication
+- [x] 7.5 Support `HAI_PROXY_PORT` for custom HAI proxy port
+- [x] 7.6 Maintain backward compatibility with existing `OPENAI_API_KEY` and `OPENAI_MODEL_*` variables
 
 ## 8. Migrate OCR Module
 
-- [ ] 8.1 Update `src/ocr.ts` to use `createAIProvider()` factory instead of direct OpenAI client
-- [ ] 8.2 Replace OpenAI vision API calls with `provider.generateVisionCompletion()`
-- [ ] 8.3 Pass model type `'ocr'` to use configured OCR model
+- [x] 8.1 Update `src/ocr.ts` to use `createAIProvider()` factory instead of direct OpenAI client
+- [x] 8.2 Replace OpenAI vision API calls with `provider.generateVisionCompletion()`
+- [x] 8.3 Pass model type `'ocr'` to use configured OCR model
 - [ ] 8.4 Test OCR with OpenAI direct provider
 - [ ] 8.5 Test OCR with Claude via HAI proxy
 
 ## 9. Migrate Summarization Module
 
-- [ ] 9.1 Update `src/summarize.ts` to use `createAIProvider()` factory
-- [ ] 9.2 Replace OpenAI chat completion calls with `provider.generateTextCompletion()`
-- [ ] 9.3 Pass model type `'summarization'` to use configured summarization model
+- [x] 9.1 Update `src/summarize.ts` to use `createAIProvider()` factory
+- [x] 9.2 Replace OpenAI chat completion calls with `provider.generateTextCompletion()`
+- [x] 9.3 Pass model type `'summarization'` to use configured summarization model
 - [ ] 9.4 Test summarization with OpenAI direct provider
 - [ ] 9.5 Test summarization with Claude via HAI proxy
 
 ## 10. Migrate OCR Validator Module
 
-- [ ] 10.1 Update `src/ocrValidator.ts` to use `createAIProvider()` factory
-- [ ] 10.2 Replace OpenAI validation calls with `provider.generateTextCompletion()`
-- [ ] 10.3 Pass model type `'validation'` to use configured validation model
+- [x] 10.1 Update `src/ocrValidator.ts` to use `createAIProvider()` factory
+- [x] 10.2 Replace OpenAI validation calls with `provider.generateTextCompletion()`
+- [x] 10.3 Pass model type `'validation'` to use configured validation model
 - [ ] 10.4 Test validation with OpenAI direct provider
 - [ ] 10.5 Test validation with Claude via HAI proxy
 
