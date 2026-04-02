@@ -33,11 +33,6 @@ export interface HandwritingReferenceConfig {
     maxCorrectionsPerImage?: number;
     minIssueConfidence?: number;
   };
-  aiProvider?: {
-    type?: 'openai' | 'hai-claude' | 'hai-openai';
-    autoStartProxy?: boolean;
-    models?: ModelMapping;
-  };
 }
 
 const DEFAULT_CONFIG_PATH = path.resolve(
@@ -334,7 +329,7 @@ export async function loadAIProviderConfig(
 ): Promise<AIProviderConfig> {
   const haiProxyPort = parseInt(process.env.HAI_PROXY_PORT || '6655', 10);
 
-  // 1. Check environment variables first
+  // 1. Check environment variables
   const envProvider = process.env.AI_PROVIDER as 'openai' | 'hai-claude' | 'hai-openai' | undefined;
 
   if (envProvider) {
@@ -359,31 +354,7 @@ export async function loadAIProviderConfig(
     return config;
   }
 
-  // 2. Check JSON config
-  if (referenceConfig?.aiProvider?.type) {
-    const jsonType = referenceConfig.aiProvider.type;
-    console.log(`📄 Using AI provider from JSON config: ${jsonType}`);
-
-    const config: AIProviderConfig = {
-      type: jsonType === 'openai' ? ProviderType.OPENAI :
-            jsonType === 'hai-claude' ? ProviderType.HAI_CLAUDE :
-            ProviderType.HAI_OPENAI,
-      apiKey: getAPIKey(jsonType),
-      baseURL: getBaseURL(jsonType),
-      models: referenceConfig.aiProvider.models || getModelMapping(jsonType),
-      autoStartProxy: referenceConfig.aiProvider.autoStartProxy ?? true,
-    };
-
-    // Handle HAI proxy requirements
-    if (jsonType.startsWith('hai-')) {
-      await ensureHAIProxyRunning(config, haiProxyPort);
-    }
-
-    logProviderConfig(config);
-    return config;
-  }
-
-  // 3. Auto-detect: Check if HAI proxy is running
+  // 2. Auto-detect: Check if HAI proxy is running
   const haiProxyRunning = await checkHAIProxyRunning(haiProxyPort);
   const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
 
@@ -402,13 +373,13 @@ export async function loadAIProviderConfig(
     return config;
   }
 
-  // 4. Fallback to OpenAI direct
+  // 3. Fallback to OpenAI direct
   if (!hasOpenAIKey) {
     throw new Error(
       'No AI provider configured. Please either:\n' +
       '1. Set OPENAI_API_KEY environment variable, or\n' +
-      '2. Install and start HAI proxy with: hai proxy start, or\n' +
-      '3. Configure AI provider in handwriting-reference.json'
+      '2. Set AI_PROVIDER=hai-claude and ensure HAI proxy is running, or\n' +
+      '3. Install HAI CLI and let the system auto-start the proxy'
     );
   }
 

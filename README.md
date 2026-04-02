@@ -41,27 +41,18 @@ No configuration needed! The system will:
 - Auto-start HAI proxy if not running
 - Use Claude 3.5 Sonnet for OCR by default
 
-**Optional:** Configure in `handwriting-reference.json`:
-```json
-{
-  "aiProvider": {
-    "type": "hai-claude",
-    "autoStartProxy": true,
-    "models": {
-      "ocr": "anthropic--claude-4.5-sonnet",
-      "summarization": "anthropic--claude-4.5-haiku",
-      "validation": "anthropic--claude-4.5-haiku"
-    }
-  }
-}
-```
-
-**Environment Variables:**
+**Configuration (optional):**
+Create `.env` file to customize settings:
 ```env
 AI_PROVIDER=hai-claude
-HAI_AUTO_START=true                # Default: true
-HAI_PROXY_PORT=6655               # Default: 6655
+HAI_AUTO_START=true                # Auto-start proxy if not running
+HAI_PROXY_PORT=6655               # Default port
 ANTHROPIC_BASE_URL=http://localhost:6655/anthropic/
+
+# Optional: Customize models
+AI_MODEL_OCR=anthropic--claude-4.5-sonnet
+AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
+AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 ```
 
 #### Option B: OpenAI Direct (For Non-SAP Users)
@@ -72,16 +63,14 @@ Create `.env` file:
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
 AI_PROVIDER=openai  # Optional, will auto-detect from API key
+
+# Optional: Customize models
+AI_MODEL_OCR=gpt-4o
+AI_MODEL_SUMMARIZATION=gpt-4o-mini
+AI_MODEL_VALIDATION=gpt-4o-mini
 ```
 
 Get your API key from: https://platform.openai.com/api-keys
-
-**Model Selection (Optional):**
-```env
-AI_MODEL_OCR=gpt-4o              # Default
-AI_MODEL_SUMMARIZATION=gpt-4o-mini   # Default
-AI_MODEL_VALIDATION=gpt-4o-mini      # Default
-```
 
 #### Option C: HAI Proxy with OpenAI
 

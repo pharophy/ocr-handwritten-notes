@@ -87,14 +87,5 @@
     "tagCorrections": true,
     "maxCorrectionsPerImage": 10,
     "minIssueConfidence": 0.8
-  },
-  "aiProvider": {
-    "type": "hai-claude",
-    "autoStartProxy": true,
-    "models": {
-      "ocr": "anthropic--claude-4.5-sonnet",
-      "summarization": "anthropic--claude-4.5-haiku",
-      "validation": "anthropic--claude-4.5-haiku"
-    }
   }
 }
