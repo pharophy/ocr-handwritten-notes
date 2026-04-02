@@ -41,11 +41,12 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
     }
 
     // Preprocess the image using sharp
+    // Ensure dimensions are within provider limits (Claude: 8000px, OpenAI: generally larger but we use 7000 to be safe)
     const preprocessedBuffer = await sharp(imageBuffer)
-      .grayscale()                      // Convert to grayscale
-      .resize({ width: 1600 })         // Resize to enhance text sharpness
-      .normalize()                     // Normalize contrast and brightness
-      .sharpen({ sigma: 1.0 })         // Enhance edges slightly
+      .grayscale()                                          // Convert to grayscale
+      .resize({ width: 1600, height: 7000, fit: 'inside' }) // Resize while maintaining aspect ratio, limit both dimensions
+      .normalize()                                          // Normalize contrast and brightness
+      .sharpen({ sigma: 1.0 })                              // Enhance edges slightly
       .toBuffer();
 
     const base64Image = preprocessedBuffer.toString('base64');
