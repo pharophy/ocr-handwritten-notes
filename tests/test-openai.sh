@@ -6,27 +6,28 @@
 set -e
 
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║         OpenAI Model Accuracy Test                        ║"
+echo "║    OpenAI via HAI Proxy Model Accuracy Test               ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Ensure HAI proxy is stopped
-echo "Stopping HAI proxy..."
-pkill -9 -f "hai proxy" 2>/dev/null || true
-sleep 3
+# Ensure HAI proxy is started (not stopped, since we're using it)
+echo "Starting HAI proxy..."
+hai proxy start --headless >/dev/null 2>&1 &
+sleep 5
 
-# Verify it's stopped
-if lsof -i :6655 >/dev/null 2>&1; then
-    echo "❌ HAI proxy is still running. Please stop it manually."
+# Verify it's running
+if ! lsof -i :6655 >/dev/null 2>&1; then
+    echo "❌ HAI proxy failed to start"
     exit 1
 fi
 
-echo "✓ HAI proxy stopped"
+echo "✓ HAI proxy running"
 echo ""
 
-# Check if .env.openai exists
-if [ ! -f .env.openai ]; then
-    echo "❌ .env.openai not found!"
+# Check if .env.proxy.openai exists
+if [ ! -f .env.proxy.openai ]; then
+    echo "❌ .env.proxy.openai not found!"
+    echo "Expected pre-configured file for OpenAI (via HAI proxy) testing"
     exit 1
 fi
 
@@ -41,14 +42,16 @@ RESULTS_DIR="test-results"
 mkdir -p "$RESULTS_DIR"
 RESULTS_FILE="$RESULTS_DIR/openai-comparison-$TIMESTAMP.txt"
 
-echo "Using configuration: .env.openai"
+echo "Using configuration: .env.proxy.openai"
 echo "Results: $RESULTS_FILE"
 echo ""
 
-# OpenAI models to test
+# OpenAI models to test (from SAP AI LLM Proxy)
 declare -a models=(
-  "gpt-4o:OpenAI GPT-4o (latest)"
-  "gpt-4-turbo:OpenAI GPT-4 Turbo"
+  "gpt-5:OpenAI GPT-5 (latest, best accuracy)"
+  "gpt-5-mini:OpenAI GPT-5 Mini (fast, cost-effective)"
+  "gpt-4.1:OpenAI GPT-4.1"
+  "gpt-4.1-mini:OpenAI GPT-4.1 Mini"
 )
 
 test_count=0
@@ -60,8 +63,8 @@ for config in "${models[@]}"; do
   echo "Test $test_count/${#models[@]}: $description"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Copy .env.openai and set specific model
-  cp .env.openai .env
+  # Copy .env.proxy.openai and set specific model
+  cp .env.proxy.openai .env
 
   # Update model in .env
   if grep -q "^AI_MODEL_OCR=" .env; then
@@ -74,7 +77,7 @@ for config in "${models[@]}"; do
   # Load variables from .env
   export $(grep -v '^#' .env | xargs)
 
-  echo "Configuration loaded from .env.openai"
+  echo "Configuration loaded from .env.proxy.openai"
   echo "Testing model: $model"
   echo "Provider: $AI_PROVIDER"
   echo ""
@@ -84,7 +87,7 @@ for config in "${models[@]}"; do
     echo "═══════════════════════════════════════════════════════════"
     echo "Test: $description"
     echo "Model: $model"
-    echo "Configuration: .env.openai"
+    echo "Configuration: .env.proxy.openai"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
   } >> "$RESULTS_FILE"
@@ -102,7 +105,7 @@ done
 if [ -f .env.backup ]; then
   mv .env.backup .env
 else
-  cp .env.claudeproxy .env
+  cp .env.proxy.claude .env
 fi
 
 echo ""
@@ -117,4 +120,4 @@ echo ""
 echo "✅ OpenAI tests complete!"
 echo "📊 Full results: $RESULTS_FILE"
 echo ""
-echo "To restore Claude configuration: cp .env.claudeproxy .env"
+echo "To restore Claude configuration: cp .env.proxy.claude .env"

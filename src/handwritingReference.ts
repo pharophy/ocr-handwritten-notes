@@ -422,8 +422,13 @@ async function ensureHAIProxyRunning(config: AIProviderConfig, port: number): Pr
  * Get API key based on provider type
  */
 function getAPIKey(providerType: string): string | undefined {
-  if (providerType === 'openai' || providerType === 'hai-openai') {
+  if (providerType === 'openai') {
     return process.env.OPENAI_API_KEY;
+  }
+
+  if (providerType === 'hai-openai') {
+    // HAI proxy uses the same auth token for both OpenAI and Anthropic endpoints
+    return process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY;
   }
 
   if (providerType === 'hai-claude') {

@@ -122,6 +122,12 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<AIResponse> {
     const model = this.getModelForType(modelType);
 
+    // GPT-5 and GPT-4.1 models require max_completion_tokens instead of max_tokens
+    const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
+    const tokenParams: any = isNewModel
+      ? { max_completion_tokens: 5000 }
+      : { max_tokens: 5000 };
+
     const response = await this.client.chat.completions.create({
       model,
       temperature: 0.0,
@@ -143,7 +149,7 @@ export class OpenAIProvider implements AIProvider {
           ],
         },
       ],
-      max_tokens: 5000,
+      ...tokenParams,
     });
 
     return this.normalizeResponse(response);
@@ -155,6 +161,12 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<AIResponse> {
     const model = this.getModelForType(modelType);
 
+    // GPT-5 and GPT-4.1 models require max_completion_tokens instead of max_tokens
+    const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
+    const tokenParams: any = isNewModel
+      ? { max_completion_tokens: 4096 }
+      : { max_tokens: 4096 };
+
     const response = await this.client.chat.completions.create({
       model,
       temperature: 0.3,
@@ -164,7 +176,7 @@ export class OpenAIProvider implements AIProvider {
           content: prompt,
         },
       ],
-      max_tokens: 4096,
+      ...tokenParams,
     });
 
     return this.normalizeResponse(response);
@@ -312,11 +324,22 @@ export function createAIProvider(config: AIProviderConfig): AIProvider {
   }
 
   // Validate API key for providers that need it
-  if (config.type === ProviderType.OPENAI || config.type === ProviderType.HAI_OPENAI) {
+  if (config.type === ProviderType.OPENAI) {
     if (!config.apiKey) {
       throw new Error(
         'OPENAI_API_KEY is required for OpenAI provider.\n' +
         'Set it in your .env file or environment variables.'
+      );
+    }
+  }
+
+  // HAI_OPENAI uses the same HAI proxy auth token as Claude
+  if (config.type === ProviderType.HAI_OPENAI) {
+    if (!config.apiKey) {
+      throw new Error(
+        'ANTHROPIC_AUTH_TOKEN or HAI_API_KEY is required for HAI OpenAI provider.\n' +
+        'These are typically set automatically when HAI proxy is configured.\n' +
+        'The same token is used for both Claude and OpenAI endpoints.'
       );
     }
   }

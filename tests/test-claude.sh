@@ -10,9 +10,10 @@ echo "║    Claude via HAI Proxy Model Accuracy Test               ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Check if .env.claudeproxy exists
-if [ ! -f .env.claudeproxy ]; then
-    echo "❌ .env.claudeproxy not found!"
+# Check if .env.proxy.claude exists
+if [ ! -f .env.proxy.claude ]; then
+    echo "❌ .env.proxy.claude not found!"
+    echo "Expected pre-configured file for Claude testing"
     exit 1
 fi
 
@@ -27,7 +28,7 @@ RESULTS_DIR="test-results"
 mkdir -p "$RESULTS_DIR"
 RESULTS_FILE="$RESULTS_DIR/claude-comparison-$TIMESTAMP.txt"
 
-echo "Using configuration: .env.claudeproxy"
+echo "Using configuration: .env.proxy.claude"
 echo "Results: $RESULTS_FILE"
 echo ""
 
@@ -45,11 +46,14 @@ fi
 echo "✓ HAI proxy running"
 echo ""
 
-# Claude models to test
+# Claude models to test (from SAP AI LLM Proxy)
 declare -a models=(
-  "anthropic--claude-4.5-sonnet:Claude 3.5 Sonnet (best for handwriting)"
-  "anthropic--claude-4.5-haiku:Claude 3.5 Haiku (fast, cost-effective)"
-  "anthropic--claude-opus-4:Claude 3 Opus (highest quality)"
+  "anthropic--claude-4.6-sonnet:Claude 4.6 Sonnet (latest)"
+  "anthropic--claude-4.6-opus:Claude 4.6 Opus (highest accuracy)"
+  "anthropic--claude-4.5-sonnet:Claude 4.5 Sonnet (excellent for handwriting)"
+  "anthropic--claude-4.5-opus:Claude 4.5 Opus (high capability)"
+  "anthropic--claude-4.5-haiku:Claude 4.5 Haiku (fast, cost-effective)"
+  "anthropic--claude-4-sonnet:Claude 4 Sonnet"
 )
 
 test_count=0
@@ -61,8 +65,8 @@ for config in "${models[@]}"; do
   echo "Test $test_count/${#models[@]}: $description"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Copy .env.claudeproxy and set specific model
-  cp .env.claudeproxy .env
+  # Copy .env.proxy.claude and set specific model
+  cp .env.proxy.claude .env
 
   # Update model in .env
   if grep -q "^AI_MODEL_OCR=" .env; then
@@ -75,7 +79,7 @@ for config in "${models[@]}"; do
   # Load variables from .env
   export $(grep -v '^#' .env | xargs)
 
-  echo "Configuration loaded from .env.claudeproxy"
+  echo "Configuration loaded from .env.proxy.claude"
   echo "Testing model: $model"
   echo "Provider: $AI_PROVIDER"
   echo ""
@@ -85,7 +89,7 @@ for config in "${models[@]}"; do
     echo "═══════════════════════════════════════════════════════════"
     echo "Test: $description"
     echo "Model: $model"
-    echo "Configuration: .env.claudeproxy"
+    echo "Configuration: .env.proxy.claude"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
   } >> "$RESULTS_FILE"
@@ -103,7 +107,7 @@ done
 if [ -f .env.backup ]; then
   mv .env.backup .env
 else
-  cp .env.claudeproxy .env
+  cp .env.proxy.claude .env
 fi
 
 echo ""

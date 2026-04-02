@@ -10,10 +10,12 @@ echo "║       Complete OCR Model Comparison Test Suite            ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 echo "This will test all available models:"
-echo "  • OpenAI GPT-4o, GPT-4 Turbo (.env.openai)"
-echo "  • Claude 3.5 Sonnet, Haiku, Opus (.env.claudeproxy)"
+echo "  • OpenAI: GPT-5, GPT-5 Mini, GPT-4.1, GPT-4.1 Mini (.env.proxy.openai)"
+echo "  • Claude: 4.6 Sonnet/Opus, 4.5 Sonnet/Opus/Haiku, 4 Sonnet (.env.proxy.claude)"
 echo ""
-echo "Estimated time: 3-5 minutes"
+echo "Estimated time: 10-15 minutes (10 models)"
+echo ""
+echo "Note: Gemini models are not currently available through HAI proxy"
 echo ""
 
 read -p "Press Enter to continue or Ctrl+C to cancel..."
@@ -41,7 +43,7 @@ echo "PHASE 1: Testing OpenAI Models"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
-./test-openai.sh
+./tests/test-openai.sh
 
 {
   echo ""
@@ -61,7 +63,7 @@ echo ""
 
 sleep 3
 
-./test-claude.sh
+./tests/test-claude.sh
 
 {
   echo ""

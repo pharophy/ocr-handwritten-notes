@@ -1,6 +1,7 @@
 # Environment variables (contains API keys)
 .env
 .env.local
+.env.backup
 
 # OS files
 .DS_Store
@@ -10,6 +11,7 @@ node_modules/
 
 # Test artifacts
 test-images/
+test-results/
 
 # Build outputs
 dist/

@@ -226,6 +226,23 @@ For each image (e.g., `meeting-notes.jpg`), the tool creates:
 
 ## ⚙️ Configuration Reference
 
+### Quick Configuration Presets
+
+For testing different AI providers, use the pre-configured files:
+
+```bash
+# Claude via HAI Proxy (recommended)
+cp .env.proxy.claude .env
+
+# OpenAI via HAI Proxy
+cp .env.proxy.openai .env
+
+# OpenAI Direct (requires API key)
+cp .env.proxy.openai-direct .env
+```
+
+See [CONFIG.md](CONFIG.md) for detailed configuration guide and [tests/MODELS.md](tests/MODELS.md) for complete model reference.
+
 ### Environment Variables (.env)
 
 All AI provider configuration is managed through environment variables in the `.env` file. See [.env.example](.env.example) for a complete reference with all available options and their descriptions.
@@ -267,35 +284,44 @@ All AI provider configuration is managed through environment variables in the `.
 #### Model Selection (Optional)
 
 **`AI_MODEL_OCR`** - Model for handwriting OCR (requires vision)
-- **OpenAI options:**
-  - `gpt-4o` (default) - Latest GPT-4 with vision, best accuracy
-  - `gpt-4-turbo` - GPT-4 Turbo with vision
-  - `gpt-4-vision-preview` - Preview version
+- **OpenAI options (via HAI proxy or direct):**
+  - `gpt-5` - Latest GPT-5 with vision, best accuracy
+  - `gpt-5-mini` - GPT-5 Mini, faster and cost-effective
+  - `gpt-4.1` - GPT-4.1 with vision
+  - `gpt-4.1-mini` - GPT-4.1 Mini
   - Full list: https://platform.openai.com/docs/models
-- **Claude via HAI options:**
-  - `anthropic--claude-4.5-sonnet` (default) - Best for handwriting
-  - `anthropic--claude-opus-4` - Highest accuracy
-  - `anthropic--claude-4.5-haiku` - Faster, lower cost
-  - List models: Run `hai models` command
+- **Claude options (via HAI proxy, recommended):**
+  - `anthropic--claude-4.6-sonnet` - Latest Claude 4.6 Sonnet (recommended)
+  - `anthropic--claude-4.6-opus` - Claude 4.6 Opus, highest accuracy
+  - `anthropic--claude-4.5-sonnet` - Claude 4.5 Sonnet, excellent for handwriting
+  - `anthropic--claude-4.5-opus` - Claude 4.5 Opus
+  - `anthropic--claude-4.5-haiku` - Claude 4.5 Haiku, faster and lower cost
+  - `anthropic--claude-4-sonnet` - Claude 4 Sonnet
+- List all models: Run `hai version` to check CLI version and test models
 
 **`AI_MODEL_SUMMARIZATION`** - Model for generating summaries
 - **OpenAI options:**
-  - `gpt-4o-mini` (default) - Optimized for speed/cost
-  - `gpt-4o` - More capable, higher cost
-  - `gpt-3.5-turbo` - Fastest, lowest cost
-- **Claude via HAI options:**
+  - `gpt-5-mini` - GPT-5 Mini, optimized for speed/cost
+  - `gpt-5` - GPT-5, more capable
+  - `gpt-4.1-mini` - GPT-4.1 Mini, balanced
+  - `gpt-4.1` - GPT-4.1, higher capability
+- **Claude options (via HAI proxy):**
   - `anthropic--claude-4.5-haiku` (default) - Fast and cost-effective
-  - `anthropic--claude-4.5-sonnet` - More capable
-  - `anthropic--claude-opus-4` - Highest quality
+  - `anthropic--claude-4.6-sonnet` - Latest Claude 4.6 Sonnet
+  - `anthropic--claude-4.5-sonnet` - Claude 4.5 Sonnet, more capable
+  - `anthropic--claude-4.6-opus` - Claude 4.6 Opus, highest quality
+  - `anthropic--claude-4.5-opus` - Claude 4.5 Opus
 
 **`AI_MODEL_VALIDATION`** - Model for OCR quality validation
 - **OpenAI options:**
-  - `gpt-4o-mini` (default) - Recommended
-  - `gpt-4o` - More thorough validation
-  - `gpt-3.5-turbo` - Fastest
+  - `gpt-5-mini` - Recommended, optimized for validation tasks
+  - `gpt-4.1-mini` - Balanced option
+  - `gpt-5` - More thorough validation
+  - `gpt-4.1` - Higher accuracy
 - **Claude via HAI options:**
   - `anthropic--claude-4.5-haiku` (default) - Fast validation
-  - `anthropic--claude-4.5-sonnet` - More thorough
+  - `anthropic--claude-4.6-sonnet` - More thorough
+  - `anthropic--claude-4.5-sonnet` - Balanced thoroughness
 
 #### Handwriting Reference
 

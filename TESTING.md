@@ -1,76 +1,214 @@
-# OCR Model Testing Suite
+# Testing Guide
 
-This directory contains scripts for testing OCR accuracy across different AI models.
+This guide explains how to test different AI models for OCR accuracy.
 
-## Configuration Files
+## Quick Start
 
-- **`.env.claudeproxy`** - Configuration for Claude models via HAI proxy (free for SAP employees)
-- **`.env.openai`** - Configuration for OpenAI models (requires API key, costs money)
-- **`.env`** - Active configuration (defaults to Claude)
-
-## Test Scripts
-
-### Quick Tests
+### Option 1: Interactive Test Launcher
 
 ```bash
-# Test OpenAI models only (GPT-4o, GPT-4 Turbo)
-./test-openai.sh
-
-# Test Claude models only (Sonnet, Haiku, Opus)
-./test-claude.sh
-
-# Test all models
-./test-all-models.sh
+./test-models.sh
 ```
 
-### What Gets Tested
+This presents a menu to choose which tests to run:
+1. Test Claude models only (6 models, ~5-7 minutes)
+2. Test OpenAI models only (4 models, ~3-5 minutes)
+3. Test all models (10 models, ~10-15 minutes)
 
-Each script tests OCR accuracy by:
-1. Loading the test image (`test-images/Cosine 02-26.jpeg`)
-2. Running OCR with each model
-3. Checking for 10 ground-truth phrases
-4. Calculating accuracy percentage
-5. Generating detailed results
+### Option 2: Run Specific Test Suite
+
+```bash
+# Test Claude models
+./tests/test-claude.sh
+
+# Test OpenAI models
+./tests/test-openai.sh
+
+# Test all models
+./tests/test-all-models.sh
+```
+
+## Test Configuration
+
+Each test script uses a pre-configured `.env.proxy.*` file:
+
+- **test-claude.sh** → `.env.proxy.claude`
+- **test-openai.sh** → `.env.proxy.openai`
+
+These files contain optimized settings for each provider.
+
+## Models Tested
+
+### Claude (6 models)
+- anthropic--claude-4.6-sonnet (latest)
+- anthropic--claude-4.6-opus (highest accuracy)
+- anthropic--claude-4.5-sonnet (excellent for handwriting)
+- anthropic--claude-4.5-opus (high capability)
+- anthropic--claude-4.5-haiku (fast, cost-effective)
+- anthropic--claude-4-sonnet (previous generation)
+
+### OpenAI (4 models)
+- gpt-5 (latest, best accuracy)
+- gpt-5-mini (fast, cost-effective)
+- gpt-4.1 (high capability)
+- gpt-4.1-mini (balanced option)
 
 ## Test Results
 
-Results are saved to `test-results/` directory with timestamps:
-- `openai-comparison-YYYYMMDD-HHMMSS.txt` - OpenAI test results
-- `claude-comparison-YYYYMMDD-HHMMSS.txt` - Claude test results
-- `complete-comparison-YYYYMMDD-HHMMSS.txt` - Combined results
+Results are saved to `test-results/` directory:
 
-## Switching Configurations
-
-To switch between providers for regular use:
-
-```bash
-# Use Claude (recommended - free and fast)
-cp .env.claudeproxy .env
-
-# Use OpenAI (costs ~$0.03 per image)
-cp .env.openai .env
+```
+test-results/
+├── claude-comparison-{timestamp}.txt
+├── openai-comparison-{timestamp}.txt
+└── complete-comparison-{timestamp}.txt
 ```
 
-## Latest Test Results
+Each result file contains:
+- Configuration details (provider, model)
+- OCR accuracy score
+- Processing time
+- Detailed test output
 
-**Winner: Claude 3.5 Haiku** 🏆
-- Accuracy: 60%
-- Cost: Free (via HAI proxy)
-- Speed: Fast
+## What Gets Tested
 
-**Runner-up: OpenAI GPT-4o**
-- Accuracy: 50%
-- Cost: ~$0.03 per image
-- Speed: Medium
+Each model is tested with:
+1. A sample handwritten note image
+2. OCR transcription accuracy
+3. Layout detection (tables vs freeform)
+4. Handwriting reference integration
+5. Quality validation
 
-**Other Models:**
-- Claude 3.5 Sonnet: 50% (free)
-- Claude 3 Opus: 50% (free, slower)
-- OpenAI GPT-4 Turbo: Not supported (no vision)
+The test compares:
+- Transcription accuracy (% correct words)
+- Processing time (seconds)
+- Confidence scores
+- Error detection
 
-## Notes
+## Interpreting Results
 
-- Tests require ~3-5 minutes to complete all models
-- OpenAI tests require valid API key in `.env.openai`
-- Claude tests require HAI CLI installed and authenticated
-- Test image is challenging (22848px tall) - real-world results typically better
+Look for these metrics in the results:
+
+```
+📊 Accuracy: 95.2%
+⏱️ Time: 3.4s
+✓ Confidence: High
+```
+
+- **Accuracy**: Percentage of correctly transcribed words
+- **Time**: Processing duration
+- **Confidence**: OCR quality assessment
+
+Higher accuracy and confidence are better. Processing time varies by model tier.
+
+## Prerequisites
+
+### For HAI Proxy Tests (Claude, OpenAI)
+
+1. Install HAI CLI:
+   ```bash
+   # See: https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/
+   ```
+
+2. Authenticate:
+   ```bash
+   hai auth login
+   ```
+
+3. Verify:
+   ```bash
+   hai models
+   ```
+
+### For OpenAI Direct Tests
+
+1. Get API key from https://platform.openai.com/api-keys
+2. Set in `.env.proxy.openai-direct`:
+   ```env
+   OPENAI_API_KEY=sk-proj-...
+   ```
+
+## Customizing Tests
+
+### Test a Single Model
+
+Edit a test script and modify the models array:
+
+```bash
+# In tests/test-claude.sh
+declare -a models=(
+  "anthropic--claude-4.6-sonnet:Claude 4.6 Sonnet (latest)"
+  # Comment out other models to skip them
+)
+```
+
+### Test with Custom Image
+
+Edit `tests/model-comparison.test.ts` and change:
+
+```typescript
+const TEST_IMAGE = 'path/to/your/test-image.jpg';
+```
+
+### Add Custom Validation
+
+Modify `handwriting-reference.json` to add:
+- Domain-specific terminology
+- Expected acronyms
+- Proper nouns
+- Special notation
+
+This improves accuracy for specialized documents.
+
+## Troubleshooting
+
+### "HAI proxy failed to start"
+
+```bash
+# Check if already running
+lsof -i :6655
+
+# Start manually
+hai proxy start
+
+# Check logs
+hai proxy logs
+```
+
+### "Model not found"
+
+```bash
+# List available models
+hai models
+
+# Verify model name format
+# Correct: anthropic--claude-4.6-sonnet
+# Wrong: anthropic-claude-4.6-sonnet (single dash)
+```
+
+### "Test results show 0% accuracy"
+
+- Check test image exists: `test-images/Cosine 02-26.jpeg`
+- Verify image is readable
+- Check model has vision capabilities
+- Review error messages in test output
+
+### "Tests taking too long"
+
+- Run individual provider tests instead of all models
+- Test only latest models (Claude 4.6 Sonnet, GPT-4.1 Mini)
+- Reduce number of test images
+
+## Best Practices
+
+1. **Run baseline first**: Test with Claude 4.6 Sonnet to establish baseline
+2. **Compare similar tiers**: Compare Opus vs GPT-5 Pro (high-end) separately from Haiku vs GPT-5 Mini (fast/cheap)
+3. **Test with your images**: Use actual handwriting samples from your use case
+4. **Track over time**: Keep results to see model improvements
+5. **Document findings**: Note which models work best for your handwriting style
+
+## See Also
+
+- [CONFIG.md](CONFIG.md) - Configuration files documentation
+- [tests/MODELS.md](tests/MODELS.md) - Complete model reference
+- [README.md](README.md) - Main project documentation
