@@ -89,12 +89,12 @@
     "minIssueConfidence": 0.8
   },
   "aiProvider": {
-    "type": "openai",
+    "type": "hai-claude",
     "autoStartProxy": true,
     "models": {
-      "ocr": "gpt-4o",
-      "summarization": "gpt-4o-mini",
-      "validation": "gpt-4o-mini"
+      "ocr": "anthropic--claude-4.5-sonnet",
+      "summarization": "anthropic--claude-4.5-haiku",
+      "validation": "anthropic--claude-4.5-haiku"
     }
   }
 }

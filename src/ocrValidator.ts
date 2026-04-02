@@ -140,7 +140,16 @@ Return your analysis as a JSON object.`;
       return createDefaultReport();
     }
 
-    const parsed = JSON.parse(content);
+    // Strip markdown code blocks if present
+    let jsonContent = content.trim();
+    if (jsonContent.startsWith('```')) {
+      jsonContent = jsonContent
+        .replace(/^```(?:json)?\n/, '')
+        .replace(/\n```$/, '')
+        .trim();
+    }
+
+    const parsed = JSON.parse(jsonContent);
 
     // Build full report from AI response
     const issues: ValidationIssue[] = parsed.issues || [];
@@ -398,10 +407,6 @@ Check for special characters, symbols, or number/letter confusion.
 Provide the corrected phrase with proper characters.`
 };
 
-const openaiForCorrection = new OpenAI({
-  apiKey: OPEN_AI_KEY
-});
-
 /**
  * Applies multi-pass correction to OCR output based on validation findings
  */
@@ -575,7 +580,7 @@ function getIssueGuidance(issue: ValidationIssue, glossary: any): string {
 }
 
 /**
- * Requests phrase correction via OpenAI
+ * Requests phrase correction via AI provider
  */
 async function requestPhraseCorrection(
   imageBuffer: Buffer,
@@ -583,35 +588,19 @@ async function requestPhraseCorrection(
 ): Promise<string | null> {
   try {
     const base64Image = imageBuffer.toString('base64');
+    const provider = await getProvider();
 
-    const response = await openaiForCorrection.chat.completions.create({
-      model: 'gpt-4o',
-      temperature: 0.2,
-      max_tokens: 200,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.'
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`
-              }
-            },
-            {
-              type: 'text',
-              text: prompt
-            }
-          ]
-        }
-      ]
-    });
+    const systemPrompt = 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.';
+    const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
-    const corrected = response.choices?.[0]?.message?.content?.trim();
+    const response = await provider.generateVisionCompletion(
+      fullPrompt,
+      base64Image,
+      'image/jpeg',
+      'ocr'
+    );
+
+    const corrected = response.content?.trim();
     return corrected || null;
   } catch (error: any) {
     console.error('❌ Correction API call failed:', error.message);
