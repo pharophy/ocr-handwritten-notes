@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# OpenAI Model Comparison Test
+# Uses .env.openai configuration
+
+set -e
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║         OpenAI Model Accuracy Test                        ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Ensure HAI proxy is stopped
+echo "Stopping HAI proxy..."
+pkill -9 -f "hai proxy" 2>/dev/null || true
+sleep 3
+
+# Verify it's stopped
+if lsof -i :6655 >/dev/null 2>&1; then
+    echo "❌ HAI proxy is still running. Please stop it manually."
+    exit 1
+fi
+
+echo "✓ HAI proxy stopped"
+echo ""
+
+# Check if .env.openai exists
+if [ ! -f .env.openai ]; then
+    echo "❌ .env.openai not found!"
+    exit 1
+fi
+
+# Backup current .env
+if [ -f .env ]; then
+    cp .env .env.backup
+fi
+
+# Results
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+RESULTS_DIR="test-results"
+mkdir -p "$RESULTS_DIR"
+RESULTS_FILE="$RESULTS_DIR/openai-comparison-$TIMESTAMP.txt"
+
+echo "Using configuration: .env.openai"
+echo "Results: $RESULTS_FILE"
+echo ""
+
+# OpenAI models to test
+declare -a models=(
+  "gpt-4o:OpenAI GPT-4o (latest)"
+  "gpt-4-turbo:OpenAI GPT-4 Turbo"
+)
+
+test_count=0
+for config in "${models[@]}"; do
+  IFS=':' read -r model description <<< "$config"
+  test_count=$((test_count + 1))
+
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Test $test_count/${#models[@]}: $description"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # Copy .env.openai and set specific model
+  cp .env.openai .env
+
+  # Update model in .env
+  if grep -q "^AI_MODEL_OCR=" .env; then
+    sed -i.bak "s|^AI_MODEL_OCR=.*|AI_MODEL_OCR=$model|" .env
+    rm .env.bak
+  else
+    echo "AI_MODEL_OCR=$model" >> .env
+  fi
+
+  # Load variables from .env
+  export $(grep -v '^#' .env | xargs)
+
+  echo "Configuration loaded from .env.openai"
+  echo "Testing model: $model"
+  echo "Provider: $AI_PROVIDER"
+  echo ""
+
+  # Log to results file
+  {
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Test: $description"
+    echo "Model: $model"
+    echo "Configuration: .env.openai"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+  } >> "$RESULTS_FILE"
+
+  # Run test
+  npx vitest run tests/model-comparison.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
+
+  echo "" >> "$RESULTS_FILE"
+  echo "" >> "$RESULTS_FILE"
+
+  sleep 3
+done
+
+# Restore original .env
+if [ -f .env.backup ]; then
+  mv .env.backup .env
+else
+  cp .env.claudeproxy .env
+fi
+
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                  Results Summary                           ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+grep -A 2 "📊 Accuracy:" "$RESULTS_FILE" || echo "No results found"
+
+echo ""
+echo "✅ OpenAI tests complete!"
+echo "📊 Full results: $RESULTS_FILE"
+echo ""
+echo "To restore Claude configuration: cp .env.claudeproxy .env"
