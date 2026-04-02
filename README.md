@@ -224,46 +224,177 @@ For each image (e.g., `meeting-notes.jpg`), the tool creates:
 
 ---
 
-## ⚙️ Advanced Configuration
+## ⚙️ Configuration Reference
 
-### Environment Variables
+### Environment Variables (.env)
 
-Edit `.env`:
+All AI provider configuration is managed through environment variables in the `.env` file. See [.env.example](.env.example) for a complete reference with all available options and their descriptions.
 
-```env
-# Required
-OPENAI_API_KEY=your_key_here
+#### AI Provider Selection
 
-# Optional: Handwriting Reference
-HANDWRITING_REFERENCE_ENABLED=true
-HANDWRITING_REFERENCE_FILE=./handwriting-reference.json
-```
+**`AI_PROVIDER`** - Choose which AI service to use
+- `openai` - Use OpenAI directly (requires OPENAI_API_KEY)
+- `hai-claude` - Use Claude via HAI proxy (recommended for SAP)
+- `hai-openai` - Use OpenAI via HAI proxy
+- *(not set)* - Auto-detect (HAI proxy if running, else OpenAI)
 
-### Handwriting Reference Configuration
+#### OpenAI Configuration
+
+**`OPENAI_API_KEY`** - Your OpenAI API key
+- Get from: https://platform.openai.com/api-keys
+- Format: `sk-proj-...` or `sk-...`
+- Required when using OpenAI direct
+
+#### HAI Proxy Configuration
+
+**`HAI_AUTO_START`** - Auto-start HAI proxy if not running
+- `true` (default) - Automatically launch HAI proxy when needed
+- `false` - Require manual start
+- Requires HAI CLI: https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/
+
+**`HAI_PROXY_PORT`** - Port for HAI proxy
+- Default: `6655`
+- Must match HAI proxy configuration
+
+**`ANTHROPIC_BASE_URL`** - Base URL for Claude API
+- Default: `http://localhost:6655/anthropic/`
+- Usually doesn't need to be changed
+
+**`ANTHROPIC_AUTH_TOKEN`** / **`HAI_API_KEY`** - Authentication token
+- Usually auto-configured by HAI CLI
+- Rarely needs manual configuration
+
+#### Model Selection (Optional)
+
+**`AI_MODEL_OCR`** - Model for handwriting OCR (requires vision)
+- **OpenAI options:**
+  - `gpt-4o` (default) - Latest GPT-4 with vision, best accuracy
+  - `gpt-4-turbo` - GPT-4 Turbo with vision
+  - `gpt-4-vision-preview` - Preview version
+  - Full list: https://platform.openai.com/docs/models
+- **Claude via HAI options:**
+  - `anthropic--claude-4.5-sonnet` (default) - Best for handwriting
+  - `anthropic--claude-opus-4` - Highest accuracy
+  - `anthropic--claude-4.5-haiku` - Faster, lower cost
+  - List models: Run `hai models` command
+
+**`AI_MODEL_SUMMARIZATION`** - Model for generating summaries
+- **OpenAI options:**
+  - `gpt-4o-mini` (default) - Optimized for speed/cost
+  - `gpt-4o` - More capable, higher cost
+  - `gpt-3.5-turbo` - Fastest, lowest cost
+- **Claude via HAI options:**
+  - `anthropic--claude-4.5-haiku` (default) - Fast and cost-effective
+  - `anthropic--claude-4.5-sonnet` - More capable
+  - `anthropic--claude-opus-4` - Highest quality
+
+**`AI_MODEL_VALIDATION`** - Model for OCR quality validation
+- **OpenAI options:**
+  - `gpt-4o-mini` (default) - Recommended
+  - `gpt-4o` - More thorough validation
+  - `gpt-3.5-turbo` - Fastest
+- **Claude via HAI options:**
+  - `anthropic--claude-4.5-haiku` (default) - Fast validation
+  - `anthropic--claude-4.5-sonnet` - More thorough
+
+#### Handwriting Reference
+
+**`HANDWRITING_REFERENCE_ENABLED`** - Enable personalized OCR
+- `true` (default) - Load handwriting reference for better accuracy
+- `false` - Use standard OCR without personalization
+
+**`HANDWRITING_REFERENCE_FILE`** - Path to reference JSON
+- Default: `./handwriting-reference.json`
+- Can be absolute or relative path
+
+### Handwriting Reference JSON
 
 See [handwriting-reference.json](handwriting-reference.json) for the configuration format.
 
-**All fields are optional:**
+**Available fields:**
 
 ```json
 {
-  "referenceWords": ["list", "of", "sample", "words"],
+  "referenceWords": ["array", "of", "sample", "words"],
   "specialCharacters": ["@ # $ %"],
   "referenceImagePath": "./handwriting-samples/reference-sheet.jpeg",
-  "notes": "Your personal notes (not used by OCR)"
+  "notes": "Personal notes (not used by OCR)",
+  
+  "domainGlossary": {
+    "acronyms": {
+      "API": "Application Programming Interface",
+      "OCR": "Optical Character Recognition"
+    },
+    "properNouns": ["CompanyName", "ProjectName"],
+    "businessTerms": ["onboarding", "roadmap"],
+    "specialNotation": {
+      "arrow": "→",
+      "description": "Preserve arrows as →"
+    }
+  },
+  
+  "ocrValidation": {
+    "enabled": true,
+    "confidenceThreshold": 0.7,
+    "skipSummarizationThreshold": 0.5,
+    "appendReportOnIssues": true
+  },
+  
+  "ocrCorrection": {
+    "enabled": true,
+    "correctCriticalOnly": true,
+    "tagCorrections": true,
+    "maxCorrectionsPerImage": 10,
+    "minIssueConfidence": 0.8
+  }
 }
 ```
+
+**Field descriptions:**
+- `referenceWords` - Sample words in your handwriting style
+- `specialCharacters` - Special characters you commonly use
+- `referenceImagePath` - Path to handwriting sample image
+- `domainGlossary.acronyms` - Common acronyms with definitions
+- `domainGlossary.properNouns` - Names, products, locations
+- `domainGlossary.businessTerms` - Domain-specific terminology
+- `ocrValidation.enabled` - Enable quality validation (true/false)
+- `ocrValidation.confidenceThreshold` - Minimum confidence to proceed (0.0-1.0)
+- `ocrCorrection.enabled` - Enable automatic correction (true/false)
+- `ocrCorrection.correctCriticalOnly` - Only fix critical issues (true/false)
 
 ---
 
 ## 🎯 How It Works
 
-1. **Image Preprocessing**: Grayscale conversion, resizing, normalization, sharpening
-2. **Handwriting Reference**: Loads your personal handwriting reference (optional)
-3. **OCR with GPT-4o Vision**: Sends preprocessed image + reference to OpenAI
-4. **Layout Detection**: AI determines if content is table or freeform
-5. **Markdown Conversion**: Transcribes to valid markdown with preserved structure
-6. **Summarization**: Generates structured summary with GPT-4o-mini (optional)
+1. **AI Provider Selection**: Chooses AI service based on configuration
+   - Auto-detects HAI proxy or falls back to OpenAI direct
+   - Supports OpenAI (GPT-4o) or Claude (via HAI proxy)
+   
+2. **Image Preprocessing**: Grayscale conversion, resizing, normalization, sharpening
+
+3. **Handwriting Reference**: Loads your personal handwriting reference (optional)
+   - Reference words and sample images
+   - Domain glossary (acronyms, proper nouns, business terms)
+   
+4. **OCR with Vision AI**: Sends preprocessed image + reference to AI provider
+   - Uses GPT-4o or Claude 3.5 Sonnet for vision analysis
+   - Understands handwriting context and style
+   
+5. **Layout Detection**: AI determines if content is table or freeform
+
+6. **Markdown Conversion**: Transcribes to valid markdown with preserved structure
+
+7. **Quality Validation**: Analyzes OCR output for errors (optional)
+   - Identifies grammatical issues, incomplete phrases, encoding errors
+   - Provides confidence score and recommendations
+   
+8. **Automatic Correction**: Fixes critical OCR errors (optional)
+   - Re-processes problematic phrases with targeted prompts
+   - Tags corrections for transparency
+   
+9. **Summarization**: Generates structured summary (optional)
+   - Uses GPT-4o-mini or Claude 3.5 Haiku for efficiency
+   - Extracts action items, key learnings, decisions, and tags
 
 ---
 
@@ -305,17 +436,37 @@ See [handwriting-reference.json](handwriting-reference.json) for the configurati
 - ✅ Ensure handwriting is reasonably legible
 
 ### "API errors"
-- Verify `OPENAI_API_KEY` in `.env` is correct
-- Check you have API credits available
-- Review console error messages for details
+- **For OpenAI:**
+  - Verify `OPENAI_API_KEY` in `.env` is correct
+  - Check you have API credits available
+  - Visit https://platform.openai.com/usage to check usage
+- **For HAI Proxy:**
+  - Verify HAI proxy is running: `lsof -i :6655`
+  - Check HAI authentication: `hai auth login`
+  - Review HAI logs: `hai proxy logs`
+- Review console error messages for specific details
 
 ---
 
 ## 📊 API Costs
 
+### Using HAI Proxy (SAP Employees)
+- **FREE** - No cost for all operations
+- Uses corporate AI infrastructure
+- No API key or billing required
+
+### Using OpenAI Direct
 - **OCR**: GPT-4o with vision (~$0.01-0.05 per image)
+  - Depends on image size and reference complexity
+  - Pricing: https://openai.com/api/pricing/
 - **Summarization**: GPT-4o-mini (~$0.001 per summary)
+- **Validation**: GPT-4o-mini (~$0.0005 per validation)
 - **Reference images**: Slight increase in OCR cost but improves accuracy
+
+**Cost optimization tips:**
+- Use HAI proxy if you're a SAP employee (free)
+- Use cheaper models for summarization/validation (already default)
+- Use Claude 3.5 Haiku via HAI for faster, more cost-effective processing
 
 ---
 
