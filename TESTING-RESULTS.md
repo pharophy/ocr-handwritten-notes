@@ -116,8 +116,7 @@ Applied to both:
 **Conclusion**: Gemini models are listed in SAP AI LLM Proxy documentation but are not actually deployed or accessible. This may be a future feature or requires special permissions.
 
 **Action Taken**:
-- Renamed `.env.proxy.gemini` to `.env.proxy.gemini.unavailable`
-- Renamed `tests/test-gemini.sh` to `tests/test-gemini.sh.unavailable`
+- Removed Gemini configuration and test files
 - Updated documentation to note Gemini models are not available
 - Removed Gemini from test launcher menu
 
@@ -190,13 +189,12 @@ All test scripts located in `tests/` directory:
 ### Configuration Files
 - `.env.proxy.claude` - Claude configuration (working)
 - `.env.proxy.openai` - OpenAI configuration (working)
-- `.env.proxy.gemini.unavailable` - Gemini config (moved, not working)
+- `.env.direct.openai` - Direct OpenAI configuration (working)
 
 ### Test Scripts
 - `tests/test-claude.sh` - Updated model list
 - `tests/test-openai.sh` - Updated model list, fixed auth
-- `tests/test-gemini.sh.unavailable` - Moved (not working)
-- `tests/test-all-models.sh` - Updated to skip Gemini
+- `tests/test-all-models.sh` - Tests all 10 working models
 - `test-models.sh` - Updated menu
 
 ### Documentation

@@ -110,7 +110,7 @@ All tasks in `openspec/changes/archive/2026-04-01-ai-provider-abstraction/tasks.
 ### ✅ Pre-configured Environments (Not in original spec)
 - ✅ `.env.proxy.claude` - Claude 4.6 Sonnet preset (100% accuracy)
 - ✅ `.env.proxy.openai` - OpenAI HAI preset
-- ✅ `.env.proxy.openai-direct` - Direct API preset
+- ✅ `.env.direct.openai` - Direct API preset
 
 ### ✅ Extensive Documentation (Beyond spec requirements)
 - ✅ `SOLUTION-SUMMARY.md` - Complete implementation guide

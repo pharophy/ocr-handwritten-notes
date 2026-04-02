@@ -67,7 +67,7 @@ AI_MODEL_SUMMARIZATION=gpt-5-mini
 AI_MODEL_VALIDATION=gpt-5-mini
 ```
 
-**`.env.proxy.openai-direct`** (Requires API Key)
+**`.env.direct.openai`** (Requires API Key)
 ```env
 AI_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
@@ -114,7 +114,7 @@ All located in `tests/` directory:
 
 2. **Configure:**
    ```bash
-   cp .env.proxy.openai-direct .env
+   cp .env.direct.openai .env
    # Edit .env and add your OPENAI_API_KEY
    ```
 
@@ -179,10 +179,6 @@ All located in `tests/` directory:
 4. **CONFIG.md, TESTING.md, tests/MODELS.md**
    - Updated documentation
    - Removed Gemini sections
-
-### Files Removed
-- `.env.proxy.gemini` (not available)
-- `tests/test-gemini.sh` (not available)
 
 ---
 

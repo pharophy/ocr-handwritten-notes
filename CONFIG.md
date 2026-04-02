@@ -8,7 +8,7 @@ This directory contains pre-configured `.env.proxy.*` files for testing differen
 |------|----------|-------------|
 | `.env.proxy.claude` | Claude via HAI Proxy | Claude 4.6 Sonnet for OCR, Haiku for summarization (Recommended) |
 | `.env.proxy.openai` | OpenAI via HAI Proxy | GPT-5 for OCR, GPT-5 Mini for summarization |
-| `.env.proxy.openai-direct` | OpenAI Direct API | GPT-5 for OCR (requires API key) |
+| `.env.direct.openai` | OpenAI Direct API | GPT-5 for OCR (requires API key) |
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ cp .env.proxy.openai .env
 npm start
 
 # Test OpenAI direct (set your API key first!)
-cp .env.proxy.openai-direct .env
+cp .env.direct.openai .env
 # Edit .env and add your OPENAI_API_KEY
 npm start
 ```
@@ -59,7 +59,7 @@ npm start
 - **Validation**: `gpt-5-mini`
 - **Best For**: Latest GPT models, zero cost for SAP employees
 
-### `.env.proxy.openai-direct`
+### `.env.direct.openai`
 - **Provider**: OpenAI Direct API
 - **OCR Model**: `gpt-5` (latest)
 - **Summarization**: `gpt-5-mini`

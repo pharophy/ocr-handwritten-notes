@@ -238,7 +238,7 @@ cp .env.proxy.claude .env
 cp .env.proxy.openai .env
 
 # OpenAI Direct (requires API key)
-cp .env.proxy.openai-direct .env
+cp .env.direct.openai .env
 ```
 
 See [CONFIG.md](CONFIG.md) for detailed configuration guide and [tests/MODELS.md](tests/MODELS.md) for complete model reference.

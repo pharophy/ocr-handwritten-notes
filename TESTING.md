@@ -123,7 +123,7 @@ Higher accuracy and confidence are better. Processing time varies by model tier.
 ### For OpenAI Direct Tests
 
 1. Get API key from https://platform.openai.com/api-keys
-2. Set in `.env.proxy.openai-direct`:
+2. Set in `.env.direct.openai`:
    ```env
    OPENAI_API_KEY=sk-proj-...
    ```
