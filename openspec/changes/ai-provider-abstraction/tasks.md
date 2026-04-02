@@ -62,7 +62,7 @@
 - [x] 8.1 Update `src/ocr.ts` to use `createAIProvider()` factory instead of direct OpenAI client
 - [x] 8.2 Replace OpenAI vision API calls with `provider.generateVisionCompletion()`
 - [x] 8.3 Pass model type `'ocr'` to use configured OCR model
-- [ ] 8.4 Test OCR with OpenAI direct provider
+- [x] 8.4 Test OCR with OpenAI direct provider
 - [x] 8.5 Test OCR with Claude via HAI proxy
 
 ## 9. Migrate Summarization Module
@@ -70,7 +70,7 @@
 - [x] 9.1 Update `src/summarize.ts` to use `createAIProvider()` factory
 - [x] 9.2 Replace OpenAI chat completion calls with `provider.generateTextCompletion()`
 - [x] 9.3 Pass model type `'summarization'` to use configured summarization model
-- [ ] 9.4 Test summarization with OpenAI direct provider
+- [x] 9.4 Test summarization with OpenAI direct provider
 - [x] 9.5 Test summarization with Claude via HAI proxy
 
 ## 10. Migrate OCR Validator Module
@@ -78,21 +78,21 @@
 - [x] 10.1 Update `src/ocrValidator.ts` to use `createAIProvider()` factory
 - [x] 10.2 Replace OpenAI validation calls with `provider.generateTextCompletion()`
 - [x] 10.3 Pass model type `'validation'` to use configured validation model
-- [ ] 10.4 Test validation with OpenAI direct provider
+- [x] 10.4 Test validation with OpenAI direct provider
 - [x] 10.5 Test validation with Claude via HAI proxy
 
 
 ## 11. Testing and Validation
 
-- [ ] 11.1 Test backward compatibility: existing `.env` with only `OPENAI_API_KEY` works unchanged
+- [x] 11.1 Test backward compatibility: existing `.env` with only `OPENAI_API_KEY` works unchanged
 - [x] 11.2 Test HAI proxy auto-detection when proxy is running and no explicit config exists
 - [x] 11.3 Test environment variable override of JSON config values
-- [ ] 11.4 Test error messages for missing API key configuration
-- [ ] 11.5 Test error messages when HAI proxy configured but not running
+- [x] 11.4 Test error messages for missing API key configuration
+- [x] 11.5 Test error messages when HAI proxy configured but not running
 - [x] 11.6 Test model mapping per operation type (different models for OCR vs summarization)
 - [x] 11.7 Verify configuration logging shows provider type and model selections
 
-Note: Testing tasks should be performed by user after documentation is complete.
+Note: All testing complete. System works with both OpenAI direct and HAI proxy.
 
 ## 12. Documentation
 
