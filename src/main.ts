@@ -26,8 +26,10 @@ async function run() {
       }
 
       const buffer = await fs.readFile(imagePath);
-      const ocrText = await processHandwrittenImage(buffer, path.basename(imagePath));
-      if (!ocrText) continue;
+      const ocrResult = await processHandwrittenImage(buffer, path.basename(imagePath));
+      if (!ocrResult) continue;
+
+      const { text: ocrText, modelUsed } = ocrResult;
 
       // Validate OCR quality
       const validationConfig = await getValidationConfig();
@@ -76,6 +78,7 @@ async function run() {
 
       if (validationReport?.hasIssues && validationConfig.appendReportOnIssues) {
         ocrOutput += '\n\n---\n\n## OCR Validation Report\n\n';
+        ocrOutput += `**Model Used**: ${modelUsed}\n\n`;
         ocrOutput += formatValidationReport(validationReport);
       }
 

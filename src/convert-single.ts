@@ -69,12 +69,14 @@ Examples:
 
     // Perform OCR
     console.log('🔍 Running OCR...');
-    const transcription = await processHandwrittenImage(imageBuffer, path.basename(imagePath));
+    const ocrResult = await processHandwrittenImage(imageBuffer, path.basename(imagePath));
 
-    if (!transcription) {
+    if (!ocrResult) {
       console.error('❌ OCR failed - no transcription returned');
       process.exit(1);
     }
+
+    const { text: transcription, modelUsed } = ocrResult;
 
     // Optional validation
     let validationReport: ValidationReport | null = null;
@@ -142,6 +144,7 @@ Examples:
 
     if (validationReport?.hasIssues) {
       ocrContent += '\n\n---\n\n## OCR Validation Report\n\n';
+      ocrContent += `**Model Used**: ${modelUsed}\n\n`;
       ocrContent += formatValidationReport(validationReport);
     }
 

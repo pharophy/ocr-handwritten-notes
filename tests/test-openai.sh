@@ -93,7 +93,7 @@ for config in "${models[@]}"; do
   } >> "$RESULTS_FILE"
 
   # Run test
-  npx vitest run tests/model-comparison.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
+  npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
 
   echo "" >> "$RESULTS_FILE"
   echo "" >> "$RESULTS_FILE"

@@ -330,15 +330,13 @@ export async function loadAIProviderConfig(
   const haiProxyPort = parseInt(process.env.HAI_PROXY_PORT || '6655', 10);
 
   // 1. Check environment variables
-  const envProvider = process.env.AI_PROVIDER as 'openai' | 'hai-claude' | 'hai-openai' | undefined;
+  const envProvider = process.env.AI_PROVIDER as 'openai' | 'hai' | undefined;
 
   if (envProvider) {
     console.log(`🔧 Using AI provider from environment: ${envProvider}`);
 
     const config: AIProviderConfig = {
-      type: envProvider === 'openai' ? ProviderType.OPENAI :
-            envProvider === 'hai-claude' ? ProviderType.HAI_CLAUDE :
-            ProviderType.HAI_OPENAI,
+      type: envProvider === 'openai' ? ProviderType.OPENAI : ProviderType.HAI,
       apiKey: getAPIKey(envProvider),
       baseURL: getBaseURL(envProvider),
       models: getModelMapping(envProvider),
@@ -346,7 +344,7 @@ export async function loadAIProviderConfig(
     };
 
     // Handle HAI proxy requirements
-    if (envProvider.startsWith('hai-')) {
+    if (envProvider === 'hai') {
       await ensureHAIProxyRunning(config, haiProxyPort);
     }
 
@@ -359,13 +357,13 @@ export async function loadAIProviderConfig(
   const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
 
   if (haiProxyRunning && !hasOpenAIKey) {
-    console.log('🔍 Auto-detected HAI proxy running, using Claude provider');
+    console.log('🔍 Auto-detected HAI proxy running, using HAI provider');
 
     const config: AIProviderConfig = {
-      type: ProviderType.HAI_CLAUDE,
+      type: ProviderType.HAI,
       apiKey: process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY,
-      baseURL: process.env.ANTHROPIC_BASE_URL || `http://localhost:${haiProxyPort}/anthropic/`,
-      models: getModelMapping('hai-claude'),
+      baseURL: `http://localhost:${haiProxyPort}`,  // Base URL without endpoint
+      models: getModelMapping('hai'),
       autoStartProxy: true,
     };
 
@@ -426,12 +424,8 @@ function getAPIKey(providerType: string): string | undefined {
     return process.env.OPENAI_API_KEY;
   }
 
-  if (providerType === 'hai-openai') {
+  if (providerType === 'hai') {
     // HAI proxy uses the same auth token for both OpenAI and Anthropic endpoints
-    return process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY;
-  }
-
-  if (providerType === 'hai-claude') {
     return process.env.ANTHROPIC_AUTH_TOKEN || process.env.HAI_API_KEY;
   }
 
@@ -444,12 +438,9 @@ function getAPIKey(providerType: string): string | undefined {
 function getBaseURL(providerType: string): string | undefined {
   const haiProxyPort = parseInt(process.env.HAI_PROXY_PORT || '6655', 10);
 
-  if (providerType === 'hai-claude') {
-    return process.env.ANTHROPIC_BASE_URL || `http://localhost:${haiProxyPort}/anthropic/`;
-  }
-
-  if (providerType === 'hai-openai') {
-    return `http://localhost:${haiProxyPort}/openai/v1`;
+  if (providerType === 'hai') {
+    // Return base proxy URL - HAIProvider will add the correct endpoint
+    return `http://localhost:${haiProxyPort}`;
   }
 
   return undefined; // OpenAI direct uses default
@@ -463,6 +454,7 @@ function getModelMapping(providerType: string): ModelMapping {
     ocr: process.env.AI_MODEL_OCR,
     summarization: process.env.AI_MODEL_SUMMARIZATION,
     validation: process.env.AI_MODEL_VALIDATION,
+    ocrFallback: process.env.AI_MODEL_OCR_FALLBACK,
   };
 
   // Remove undefined values
@@ -502,6 +494,7 @@ function logProviderConfig(config: AIProviderConfig): void {
     if (config.models.ocr) console.log(`    OCR: ${config.models.ocr}`);
     if (config.models.summarization) console.log(`    Summarization: ${config.models.summarization}`);
     if (config.models.validation) console.log(`    Validation: ${config.models.validation}`);
+    if (config.models.ocrFallback) console.log(`    OCR Fallback: ${config.models.ocrFallback}`);
   }
   console.log('');
 }

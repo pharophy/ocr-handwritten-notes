@@ -44,15 +44,18 @@ No configuration needed! The system will:
 **Configuration (optional):**
 Create `.env` file to customize settings:
 ```env
-AI_PROVIDER=hai-claude
+AI_PROVIDER=hai
 HAI_AUTO_START=true                # Auto-start proxy if not running
 HAI_PROXY_PORT=6655               # Default port
-ANTHROPIC_BASE_URL=http://localhost:6655/anthropic/
 
-# Optional: Customize models
-AI_MODEL_OCR=anthropic--claude-4.5-sonnet
+# Optional: Customize models (HAI auto-routes based on model name)
+AI_MODEL_OCR=anthropic--claude-4.6-sonnet
 AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
 AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
+
+# Automatic Fallback OCR (Recommended)
+# Automatically retries with a different model if OCR quality is poor
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini  # Cross-provider fallback
 ```
 
 #### Option B: OpenAI Direct (For Non-SAP Users)
@@ -68,16 +71,21 @@ AI_PROVIDER=openai  # Optional, will auto-detect from API key
 AI_MODEL_OCR=gpt-4o
 AI_MODEL_SUMMARIZATION=gpt-4o-mini
 AI_MODEL_VALIDATION=gpt-4o-mini
+
+# Automatic Fallback OCR (Recommended)
+AI_MODEL_OCR_FALLBACK=anthropic--claude-4.6-sonnet  # Cross-provider fallback
 ```
 
 Get your API key from: https://platform.openai.com/api-keys
 
-#### Option C: HAI Proxy with OpenAI
+#### Option C: HAI Proxy with OpenAI Primary
 
-Use OpenAI models through HAI proxy instead of Claude:
+Use OpenAI models as primary through HAI proxy:
 
 ```env
-AI_PROVIDER=hai-openai
+AI_PROVIDER=hai
+AI_MODEL_OCR=gpt-5                    # OpenAI model
+AI_MODEL_OCR_FALLBACK=anthropic--claude-4.6-sonnet  # Claude fallback
 # HAI proxy will be auto-started
 ```
 
@@ -226,6 +234,104 @@ For each image (e.g., `meeting-notes.jpg`), the tool creates:
 
 ## ⚙️ Configuration Reference
 
+### Automatic OCR Fallback
+
+**Improve OCR accuracy across different handwriting styles** by configuring automatic fallback to a secondary model when the primary produces poor quality results.
+
+#### How It Works
+
+1. **Primary OCR** runs with your configured model (e.g., Claude 4.6 Sonnet)
+2. **Quality Assessment** checks for poor quality indicators:
+   - High percentage of illegible markers (>15%)
+   - Consecutive illegible markers (5+ in a row)
+   - Very short output for large images (<50 chars for >100KB images)
+3. **Automatic Fallback** retries with a different model if quality is poor
+4. **Best Result** is returned automatically
+
+**Real-world example:**
+- Primary (Claude 4.6 Sonnet): 26% illegible → 112 `*[illegible]*` markers
+- Fallback (GPT-4.1 Mini): 0% illegible → Clean, readable output ✓
+
+#### Configuration
+
+Set `AI_MODEL_OCR_FALLBACK` in your `.env` file:
+
+```env
+# Primary OCR model
+AI_MODEL_OCR=anthropic--claude-4.6-sonnet
+
+# Fallback model (recommended: different provider than primary)
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini  # Cross-provider fallback
+```
+
+**Requirements:**
+- HAI proxy must be running for cross-provider fallback (Claude ↔ OpenAI)
+- Both providers accessible through same proxy (default setup)
+- No additional configuration needed - automatic provider switching
+
+#### Recommended Model Combinations
+
+Based on comprehensive testing across handwriting styles:
+
+| Primary Model | Fallback Model | Best For |
+|--------------|----------------|----------|
+| Claude 4.6 Sonnet | GPT-4.1 Mini | **Recommended** - Best overall coverage |
+| GPT-4o | Claude 4.6 Sonnet | OpenAI users wanting Claude fallback |
+| Claude 4.6 Opus | GPT-4.1 Mini | High-accuracy primary with fast fallback |
+
+**Why cross-provider?** Different AI models excel at different handwriting styles. Claude 4.6 Sonnet achieves 100% accuracy on business notes but struggles with technical planning docs, while GPT-4.1 Mini performs well where Claude struggles.
+
+#### Quality Thresholds (Optional)
+
+Fine-tune when fallback triggers by setting these environment variables:
+
+```env
+# Trigger fallback if >15% of words are illegible (default: 15)
+OCR_ILLEGIBLE_THRESHOLD=15
+
+# Trigger fallback if 5+ consecutive illegible markers found (default: 1 occurrence)
+OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD=1
+
+# Trigger fallback if output <50 chars for images >100KB (default: 50)
+OCR_MIN_LENGTH_THRESHOLD=50
+
+# Minimum image size to check length (default: 100000 bytes = ~100KB)
+OCR_MIN_IMAGE_SIZE=100000
+```
+
+**Tuning guidance:**
+- **Lower threshold (10-15%)**: More aggressive, fewer poor results slip through
+- **Higher threshold (20-30%)**: More conservative, fallback only on severe quality issues
+- **Recommended**: Keep default 15% based on production testing
+
+#### Disable Fallback
+
+To use only the primary model:
+
+```env
+AI_MODEL_OCR_FALLBACK=none
+# or
+AI_MODEL_OCR_FALLBACK=""
+```
+
+#### Monitoring Fallback Usage
+
+When fallback triggers, you'll see log output:
+
+```
+📊 OCR Quality Assessment: { illegiblePercent: '26.1%', ... isPoorQuality: true }
+⚠️  Primary quality poor (High illegible percentage: 26.1% (threshold: 15%)), trying fallback: gpt-4.1-mini
+✓ Fallback model succeeded: gpt-4.1-mini-2025-04-14
+📊 Fallback Quality Assessment: { illegiblePercent: '0.0%', ... isPoorQuality: false }
+```
+
+When primary succeeds without fallback:
+
+```
+📊 OCR Quality Assessment: { illegiblePercent: '5.2%', ... isPoorQuality: false }
+✓ Primary model succeeded: claude-sonnet-4-6
+```
+
 ### Quick Configuration Presets
 
 For testing different AI providers, use the pre-configured files:
@@ -251,8 +357,7 @@ All AI provider configuration is managed through environment variables in the `.
 
 **`AI_PROVIDER`** - Choose which AI service to use
 - `openai` - Use OpenAI directly (requires OPENAI_API_KEY)
-- `hai-claude` - Use Claude via HAI proxy (recommended for SAP)
-- `hai-openai` - Use OpenAI via HAI proxy
+- `hai` - Use HAI proxy (automatically routes to Claude or OpenAI based on model)
 - *(not set)* - Auto-detect (HAI proxy if running, else OpenAI)
 
 #### OpenAI Configuration

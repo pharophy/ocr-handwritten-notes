@@ -48,13 +48,15 @@ npm start
 ### `.env.proxy.claude`
 - **Provider**: HAI Proxy with Claude
 - **OCR Model**: `anthropic--claude-4.6-sonnet` (latest, recommended)
+- **OCR Fallback**: `gpt-4.1-mini` (cross-provider automatic fallback)
 - **Summarization**: `anthropic--claude-4.5-haiku` (fast, cost-effective)
 - **Validation**: `anthropic--claude-4.5-haiku`
-- **Best For**: Handwriting OCR, zero cost for SAP employees
+- **Best For**: Handwriting OCR, zero cost for SAP employees, automatic quality improvement
 
 ### `.env.proxy.openai`
 - **Provider**: HAI Proxy with OpenAI
 - **OCR Model**: `gpt-5` (latest, best accuracy)
+- **OCR Fallback**: `anthropic--claude-4.6-sonnet` (cross-provider automatic fallback)
 - **Summarization**: `gpt-5-mini` (fast, cost-effective)
 - **Validation**: `gpt-5-mini`
 - **Best For**: Latest GPT models, zero cost for SAP employees
@@ -62,6 +64,7 @@ npm start
 ### `.env.direct.openai`
 - **Provider**: OpenAI Direct API
 - **OCR Model**: `gpt-5` (latest)
+- **OCR Fallback**: `gpt-4.1-mini` (same-provider fallback)
 - **Summarization**: `gpt-5-mini`
 - **Validation**: `gpt-5-mini`
 - **Best For**: Non-SAP users, requires OpenAI API key
@@ -75,12 +78,23 @@ You can customize which model to use for each operation by editing the `.env` fi
 # Vision model for OCR (handwriting recognition)
 AI_MODEL_OCR=anthropic--claude-4.6-sonnet
 
+# Fallback model when primary OCR quality is poor (automatic retry)
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini
+
 # Text model for summarization
 AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
 
 # Text model for validation
 AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 ```
+
+### Automatic OCR Fallback
+
+The system automatically retries OCR with a fallback model when primary quality is poor:
+- Triggers on >15% illegible markers, 5+ consecutive illegibles, or very short output
+- Cross-provider fallback recommended (Claude → OpenAI or vice versa)
+- Dramatically improves accuracy on challenging handwriting
+- See README.md for detailed configuration and tuning options
 
 See [tests/MODELS.md](tests/MODELS.md) for complete list of available models.
 
