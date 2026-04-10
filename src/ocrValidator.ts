@@ -1,5 +1,16 @@
 import { createAIProvider, AIProvider } from './aiProvider';
 import { loadHandwritingReference, loadAIProviderConfig, type HandwritingReferenceConfig } from './handwritingReference';
+import {
+  compressImageIfNeeded,
+  getCompressionConfig,
+  PREPROCESSING_WIDTH,
+  PREPROCESSING_HEIGHT,
+  PREPROCESSING_QUALITY,
+  PREPROCESSING_SHARPEN_SIGMA,
+  CONFIDENCE_TO_PERCENT,
+  PERCENT_WHOLE_NUMBER,
+} from './ocr';
+import sharp from 'sharp';
 
 export interface ValidationIssue {
   type: 'grammar' | 'semantics' | 'incomplete' | 'encoding';
@@ -198,7 +209,7 @@ export async function getValidationConfig(): Promise<ValidationConfig> {
 export function formatValidationReport(report: ValidationReport): string {
   const lines: string[] = [];
 
-  lines.push(`**Overall Quality**: ${(report.overallConfidence * 100).toFixed(0)}%`);
+  lines.push(`**Overall Quality**: ${(report.overallConfidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%`);
   lines.push(`**Recommendation**: ${report.recommendation}`);
   lines.push('');
 
@@ -587,7 +598,29 @@ async function requestPhraseCorrection(
   prompt: string
 ): Promise<string | null> {
   try {
-    const base64Image = imageBuffer.toString('base64');
+    // Preprocess and compress image (same pipeline as OCR to ensure <5MB)
+    const preprocessedBuffer = await sharp(imageBuffer)
+      .grayscale()
+      .resize({ width: PREPROCESSING_WIDTH, height: PREPROCESSING_HEIGHT, fit: 'inside' })
+      .normalize()
+      .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
+      .jpeg({ quality: PREPROCESSING_QUALITY })
+      .toBuffer();
+
+    // Apply compression if needed
+    const compressionConfig = getCompressionConfig();
+    let finalBuffer = preprocessedBuffer;
+
+    if (compressionConfig.enabled) {
+      const compressionResult = await compressImageIfNeeded(
+        preprocessedBuffer,
+        compressionConfig.maxSizeBytes,
+        compressionConfig.minQuality
+      );
+      finalBuffer = compressionResult.buffer;
+    }
+
+    const base64Image = finalBuffer.toString('base64');
     const provider = await getProvider();
 
     const systemPrompt = 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.';
@@ -628,7 +661,7 @@ export function formatCorrectionLog(corrections: CorrectionLog[]): string {
     if (c.validationNote) {
       lines.push(`   - Note: ${c.validationNote}`);
     }
-    lines.push(`   - Confidence: ${(c.confidence * 100).toFixed(0)}%`);
+    lines.push(`   - Confidence: ${(c.confidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%`);
     lines.push('');
   });
 

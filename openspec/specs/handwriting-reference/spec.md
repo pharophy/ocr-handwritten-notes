@@ -1,9 +1,7 @@
 ## Purpose
 
 The Handwriting Reference capability improves OCR character recognition accuracy by providing personalized examples of how a specific user writes letters, numbers, and words.
-
 ## Requirements
-
 ### Requirement: Handwriting reference configuration
 The system SHALL support optional handwriting reference configuration to improve OCR character recognition accuracy.
 
@@ -35,7 +33,7 @@ The system SHALL support a JSON configuration format with reference words, speci
 - **THEN** the system SHALL include these in the handwriting reference context
 
 ### Requirement: Reference image loading
-The system SHALL load and validate reference images specified in the configuration.
+The system SHALL load, validate, and compress reference images specified in the configuration.
 
 #### Scenario: Valid reference image
 - **WHEN** a reference image path is specified and the file exists
@@ -47,7 +45,7 @@ The system SHALL load and validate reference images specified in the configurati
 
 #### Scenario: Large reference images
 - **WHEN** a reference image exceeds 5MB in size
-- **THEN** the system SHALL log a warning about potential increased API costs but still process it
+- **THEN** the system SHALL automatically compress the image using progressive quality reduction to meet the 5MB limit before including it in OCR API calls
 
 #### Scenario: Invalid image format
 - **WHEN** a reference image has an extension other than .jpg, .jpeg, or .png
@@ -121,3 +119,4 @@ The system SHALL provide specific guidance to the OCR model for disambiguating c
 #### Scenario: Confusion mitigation
 - **WHEN** including reference context in the prompt
 - **THEN** the instructions SHALL specifically mention commonly confused letter pairs (l/I/1, a/o, u/v, m/n, 0/O) and guide the model to use reference examples for disambiguation
+

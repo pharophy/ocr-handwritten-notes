@@ -1,15 +1,17 @@
 ## Purpose
 
 The OCR Processing capability converts handwritten note images into accurate, structured markdown text while preserving layout, formatting, and visual elements.
-
 ## Requirements
-
 ### Requirement: Image preprocessing
-The system SHALL preprocess handwritten images to enhance text clarity and readability before OCR processing.
+The system SHALL preprocess handwritten images to enhance text clarity and readability before OCR processing, including automatic compression for oversized images.
 
 #### Scenario: Standard image preprocessing
 - **WHEN** a handwritten image is submitted for OCR processing
 - **THEN** the image SHALL be converted to grayscale, resized to 1600px width, normalized for contrast and brightness, and sharpened
+
+#### Scenario: Preprocessing with compression for large images
+- **WHEN** a handwritten image is submitted for OCR processing and the preprocessed buffer exceeds 5MB
+- **THEN** the image SHALL be automatically compressed using progressive quality reduction to meet the 5MB limit before being sent to the AI provider
 
 ### Requirement: Handwriting transcription accuracy
 The system SHALL transcribe handwritten text with character-level fidelity, preserving all content without summarization or omission.
@@ -87,3 +89,4 @@ The system SHALL handle OCR processing errors gracefully without crashing.
 #### Scenario: Invalid image data
 - **WHEN** an image file cannot be read or processed
 - **THEN** the system SHALL log an error and continue processing remaining images
+

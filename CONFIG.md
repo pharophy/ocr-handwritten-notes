@@ -158,6 +158,45 @@ hai models
 # Wrong: anthropic-claude-4.6-sonnet
 ```
 
+**Image too large errors?**
+- Image compression is enabled by default for images >5MB
+- Check compression logs in output: `✓ Image compressed: X.XMB → Y.YMB`
+- If image still can't compress, manually resize to ~2000px width
+- Adjust compression settings in `.env`:
+  ```env
+  IMAGE_COMPRESSION_MAX_SIZE_MB=5        # Claude's 5MB limit
+  IMAGE_COMPRESSION_MIN_QUALITY=70       # Min quality (lower = more compression)
+  IMAGE_COMPRESSION_ENABLED=true         # Enable/disable compression
+  ```
+
+## Image Compression Configuration
+
+All preset configurations include automatic image compression to handle large images (>5MB) that exceed Claude 4.6 Sonnet's limit.
+
+**How it works:**
+1. Images are preprocessed (grayscale, resize, normalize, sharpen)
+2. If preprocessed buffer >5MB, progressive compression is applied:
+   - Try quality=90 (high quality, minimal compression)
+   - If still >5MB, try quality=80
+   - If still >5MB, try quality=70 (minimum for text readability)
+   - If still >5MB, fail with manual resize guidance
+
+**Default settings:**
+- `IMAGE_COMPRESSION_MAX_SIZE_MB=5` - Claude 4.6 Sonnet's limit
+- `IMAGE_COMPRESSION_MIN_QUALITY=70` - Tested for text readability
+- `IMAGE_COMPRESSION_ENABLED=true` - Auto-compression enabled
+
+**Tuning:**
+- Increase `MAX_SIZE_MB` for providers with higher limits (e.g., OpenAI: 20MB)
+- Decrease `MIN_QUALITY` (60-69) for more aggressive compression (risk: illegible text)
+- Increase `MIN_QUALITY` (75-85) for better quality (risk: may not meet size limit)
+- Set `ENABLED=false` to disable compression (images >5MB will fail)
+
+**Example output:**
+```
+✓ Image compressed: 6.20MB → 4.80MB (quality=80, ratio=1.29x)
+```
+
 ## See Also
 
 - [README.md](README.md) - Main project documentation

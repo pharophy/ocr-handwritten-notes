@@ -9,6 +9,8 @@ Automated OCR tool for converting handwritten notes to markdown with AI-powered 
 - **AI Summarization**: Generates structured summaries with action items, learnings, and decisions
 - **Handwriting Reference**: Personalized character recognition based on your writing style
 - **Batch Processing**: Processes multiple images in monitored folders
+- **Automatic Image Compression**: Handles large images (>5MB) with quality-preserving compression
+- **Automatic OCR Fallback**: Retries with alternate model when primary OCR quality is poor
 
 ---
 
@@ -370,6 +372,68 @@ When primary succeeds without fallback:
 ✓ Primary model succeeded: claude-sonnet-4-6
 ```
 
+### Automatic Image Compression
+
+**Handle large images automatically** by enabling compression for images that exceed Claude 4.6 Sonnet's 5MB limit.
+
+#### How It Works
+
+Claude 4.6 Sonnet has a 5MB limit for image inputs. High-resolution scanned notes often exceed this (6-15MB). The system automatically compresses oversized images using progressive quality reduction while preserving text readability:
+
+1. **Check size after preprocessing** - Most images will be <5MB and won't need compression
+2. **Progressive quality reduction** - Try quality=90, then 80, then 70 (minimum)
+3. **Stop when target met** - Use the highest quality that fits within 5MB
+4. **Fail with guidance** - If even quality=70 exceeds 5MB, provide manual resize instructions
+
+**Real-world example:**
+- Original preprocessed: 6.2MB
+- Compressed at quality=80: 4.8MB ✓
+- Compression ratio: 1.29x
+
+#### Configuration
+
+Image compression is **enabled by default** with sensible defaults:
+
+```env
+# Optional - defaults work for most cases
+IMAGE_COMPRESSION_MAX_SIZE_MB=5        # Claude 4.6 Sonnet's limit
+IMAGE_COMPRESSION_MIN_QUALITY=70       # Minimum acceptable quality for text
+IMAGE_COMPRESSION_ENABLED=true         # Enable automatic compression
+```
+
+**Tuning guidance:**
+- **Lower min quality (60-69)**: More aggressive compression, higher risk of illegible text
+- **Higher min quality (75-85)**: Less compression, may not meet 5MB limit
+- **Recommended**: Keep default quality=70 (tested for text readability)
+
+#### Disable Compression
+
+To disable automatic compression (images >5MB will fail):
+
+```env
+IMAGE_COMPRESSION_ENABLED=false
+```
+
+#### Monitoring Compression
+
+When compression occurs, you'll see log output:
+
+```
+✓ Image compressed: 6.20MB → 4.80MB (quality=80, ratio=1.29x)
+```
+
+When compression isn't needed:
+
+```
+✓ Primary model succeeded: claude-sonnet-4-6
+📊 OCR Quality Assessment: { illegiblePercent: '5.2%', ... isPoorQuality: false }
+```
+
+**Troubleshooting:** If you see "Image too large to compress" errors:
+1. Check original image resolution (8000×8000 pixels is reasonable limit)
+2. Consider manually resizing very large scans before processing
+3. Use image editing software to reduce resolution to ~2000px width
+
 ### Quick Configuration Presets
 
 For testing different AI providers, use the pre-configured files:
@@ -470,6 +534,28 @@ All AI provider configuration is managed through environment variables in the `.
   - `anthropic--claude-4.5-haiku` (default) - Fast validation
   - `anthropic--claude-4.6-sonnet` - More thorough
   - `anthropic--claude-4.5-sonnet` - Balanced thoroughness
+
+#### Image Compression
+
+**`IMAGE_COMPRESSION_MAX_SIZE_MB`** - Maximum image size before compression
+- Default: `5` (Claude 4.6 Sonnet's limit)
+- Images larger than this will be automatically compressed
+- Adjust for different AI providers (e.g., `20` for OpenAI)
+
+**`IMAGE_COMPRESSION_MIN_QUALITY`** - Minimum JPEG quality for compression
+- Default: `70` (minimum acceptable quality for text readability)
+- Range: `1-100`
+- Lower = more compression, higher risk of illegible text
+- Higher = less compression, may not meet size limit
+
+**`IMAGE_COMPRESSION_ENABLED`** - Enable/disable automatic compression
+- Default: `true`
+- Set to `false` to disable compression (images >5MB will fail)
+
+**Example logging output when compression occurs:**
+```
+✓ Image compressed: 6.20MB → 4.80MB (quality=80, ratio=1.29x)
+```
 
 #### Handwriting Reference
 

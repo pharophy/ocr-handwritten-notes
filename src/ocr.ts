@@ -13,11 +13,68 @@ import {
   type HandwritingReferenceConfig
 } from './handwritingReference';
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Image preprocessing constants (exported for use in validation pipeline)
+export const PREPROCESSING_WIDTH = 1600;           // Max width for preprocessed images
+export const PREPROCESSING_HEIGHT = 7000;          // Max height for preprocessed images
+export const PREPROCESSING_QUALITY = 95;           // Initial JPEG quality before compression
+export const PREPROCESSING_SHARPEN_SIGMA = 1.0;    // Sharpening intensity
+
+// Compression quality levels (progressive reduction)
+export const COMPRESSION_QUALITY_HIGH = 90;        // First attempt
+export const COMPRESSION_QUALITY_MEDIUM = 80;      // Second attempt
+// Third attempt uses minQuality parameter (default: DEFAULT_COMPRESSION_MIN_QUALITY)
+
+// Default compression configuration
+export const DEFAULT_COMPRESSION_MAX_SIZE_MB = 5;  // Claude 4.6 Sonnet limit
+export const DEFAULT_COMPRESSION_MIN_QUALITY = 70; // Minimum acceptable quality (third attempt)
+
+// Unit conversion constants (exported for use in other modules)
+export const BYTES_PER_KB = 1024;
+export const BYTES_PER_MB = 1024 * 1024;
+export const CONFIDENCE_TO_PERCENT = 100;  // Multiply 0.0-1.0 confidence by 100 for percentage
+
+// Display formatting constants (exported for use in other modules)
+export const SIZE_DECIMAL_PLACES = 2;      // Decimal places for MB size display
+export const RATIO_DECIMAL_PLACES = 2;     // Decimal places for compression ratio display
+export const PERCENT_DECIMAL_PLACES = 1;   // Decimal places for percentage display (with decimals)
+export const PERCENT_WHOLE_NUMBER = 0;     // Decimal places for percentage display (whole numbers)
+
+// OCR quality assessment thresholds
+const ILLEGIBLE_THRESHOLD_PERCENT = 0.15;           // 15% illegible markers triggers poor quality
+const CONSECUTIVE_ILLEGIBLE_THRESHOLD = 5;          // 5+ consecutive illegibles triggers poor quality
+const CONSECUTIVE_THRESHOLD_DEFAULT = 1;            // Default for env var OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD
+const MIN_OUTPUT_LENGTH = 50;                       // Minimum expected output length
+const MIN_IMAGE_SIZE_BYTES = 100000;                // Minimum image size (100KB) for quality assessment
+const ILLEGIBLE_PATTERN = /\*\[illegible\]\*/g;
+
+// ============================================================================
+// Cache
+// ============================================================================
+
 // Cache the handwriting reference and AI provider to avoid loading on every OCR call
 let cachedReference: HandwritingReferenceConfig | null = null;
 let cachedReferenceImage: Buffer | null = null;
 let cachedProvider: AIProvider | null = null;
 let referenceLoaded = false;
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+/**
+ * Get compression configuration from environment variables
+ */
+export function getCompressionConfig() {
+  return {
+    maxSizeBytes: parseInt(process.env.IMAGE_COMPRESSION_MAX_SIZE_MB || String(DEFAULT_COMPRESSION_MAX_SIZE_MB), 10) * BYTES_PER_MB,
+    minQuality: parseInt(process.env.IMAGE_COMPRESSION_MIN_QUALITY || String(DEFAULT_COMPRESSION_MIN_QUALITY), 10),
+    enabled: process.env.IMAGE_COMPRESSION_ENABLED !== 'false',
+  };
+}
 
 /**
  * Assess the quality of OCR transcription output
@@ -33,27 +90,27 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
   const outputLength = transcription.length;
 
   // Count illegible markers as single units
-  const illegibleMatches = transcription.match(/\*\[illegible\]\*/g) || [];
+  const illegibleMatches = transcription.match(ILLEGIBLE_PATTERN) || [];
   const illegibleCount = illegibleMatches.length;
 
   // Remove illegible markers and count remaining words
-  const textWithoutIllegibles = transcription.replace(/\*\[illegible\]\*/g, '');
+  const textWithoutIllegibles = transcription.replace(ILLEGIBLE_PATTERN, '');
   const normalWords = textWithoutIllegibles.split(/[\s\n\r,;.!?()[\]{}]+/).filter(w => w.length > 0);
 
   // Total words = illegible markers + normal words
   const totalWords = illegibleCount + normalWords.length;
-  const illegiblePercent = totalWords > 0 ? (illegibleCount / totalWords) * 100 : 0;
+  const illegiblePercent = totalWords > 0 ? (illegibleCount / totalWords) * CONFIDENCE_TO_PERCENT : 0;
 
-  // Detect consecutive illegible markers (threshold: 5 or more in a row)
-  const consecutivePattern = /(\*\[illegible\]\*[\s\n\r]*){5,}/g;
+  // Detect consecutive illegible markers
+  const consecutivePattern = new RegExp(`(\\*\\[illegible\\]\\*[\\s\\n\\r]*){${CONSECUTIVE_ILLEGIBLE_THRESHOLD},}`, 'g');
   const consecutiveMatches = transcription.match(consecutivePattern) || [];
   const consecutiveIllegibles = consecutiveMatches.length;
 
-  // Quality thresholds (configurable via env vars)
-  const illegibleThreshold = parseFloat(process.env.OCR_ILLEGIBLE_THRESHOLD || '15');
-  const consecutiveThreshold = parseInt(process.env.OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD || '1', 10);
-  const minLengthThreshold = parseInt(process.env.OCR_MIN_LENGTH_THRESHOLD || '50', 10);
-  const minImageSize = parseInt(process.env.OCR_MIN_IMAGE_SIZE || '100000', 10);
+  // Quality thresholds (configurable via env vars with defaults from constants)
+  const illegibleThreshold = parseFloat(process.env.OCR_ILLEGIBLE_THRESHOLD || String(ILLEGIBLE_THRESHOLD_PERCENT * CONFIDENCE_TO_PERCENT));
+  const consecutiveThreshold = parseInt(process.env.OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD || String(CONSECUTIVE_THRESHOLD_DEFAULT), 10);
+  const minLengthThreshold = parseInt(process.env.OCR_MIN_LENGTH_THRESHOLD || String(MIN_OUTPUT_LENGTH), 10);
+  const minImageSize = parseInt(process.env.OCR_MIN_IMAGE_SIZE || String(MIN_IMAGE_SIZE_BYTES), 10);
 
   // Check quality criteria
   let isPoorQuality = false;
@@ -61,13 +118,13 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
 
   if (illegiblePercent > illegibleThreshold) {
     isPoorQuality = true;
-    reason = `High illegible percentage: ${illegiblePercent.toFixed(1)}% (threshold: ${illegibleThreshold}%)`;
+    reason = `High illegible percentage: ${illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}% (threshold: ${illegibleThreshold}%)`;
   } else if (consecutiveIllegibles >= consecutiveThreshold) {
     isPoorQuality = true;
     reason = `Consecutive illegible markers detected: ${consecutiveIllegibles} occurrences (threshold: ${consecutiveThreshold})`;
   } else if (outputLength < minLengthThreshold && imageSize > minImageSize) {
     isPoorQuality = true;
-    reason = `Output too short: ${outputLength} chars for ${(imageSize / 1024).toFixed(1)}KB image (threshold: ${minLengthThreshold} chars)`;
+    reason = `Output too short: ${outputLength} chars for ${(imageSize / BYTES_PER_KB).toFixed(PERCENT_DECIMAL_PLACES)}KB image (threshold: ${minLengthThreshold} chars)`;
   }
 
   return {
@@ -77,6 +134,94 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
     outputLength,
     reason,
   };
+}
+
+/**
+ * Compression metrics returned when an image is compressed
+ */
+export interface CompressionMetrics {
+  originalSize: number;
+  compressedSize: number;
+  quality: number;
+  ratio: number;
+}
+
+/**
+ * Result of image compression operation
+ */
+export interface CompressionResult {
+  buffer: Buffer;
+  compressed: boolean;
+  metrics?: CompressionMetrics;
+}
+
+/**
+ * Compress image if it exceeds target size using progressive quality reduction
+ *
+ * @param buffer - Image buffer to compress
+ * @param targetSizeBytes - Maximum allowed size in bytes (default: 5MB)
+ * @param minQuality - Minimum JPEG quality to try (default: 70)
+ * @returns Compression result with buffer and metrics
+ */
+export async function compressImageIfNeeded(
+  buffer: Buffer,
+  targetSizeBytes: number = DEFAULT_COMPRESSION_MAX_SIZE_MB * BYTES_PER_MB,
+  minQuality: number = DEFAULT_COMPRESSION_MIN_QUALITY
+): Promise<CompressionResult> {
+  const originalSize = buffer.length;
+
+  // Check if compression is needed
+  if (originalSize <= targetSizeBytes) {
+    return {
+      buffer,
+      compressed: false,
+    };
+  }
+
+  // Progressive quality reduction: high → medium → minimum
+  const qualityLevels = [COMPRESSION_QUALITY_HIGH, COMPRESSION_QUALITY_MEDIUM, minQuality];
+
+  for (const quality of qualityLevels) {
+    try {
+      const compressedBuffer = await sharp(buffer)
+        .jpeg({ quality })
+        .toBuffer();
+
+      const compressedSize = compressedBuffer.length;
+
+      if (compressedSize <= targetSizeBytes) {
+        const metrics: CompressionMetrics = {
+          originalSize,
+          compressedSize,
+          quality,
+          ratio: originalSize / compressedSize,
+        };
+
+        // Log compression success
+        console.log(
+          `✓ Image compressed: ${(originalSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB → ${(compressedSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB ` +
+          `(quality=${quality}, ratio=${metrics.ratio.toFixed(RATIO_DECIMAL_PLACES)}x)`
+        );
+
+        return {
+          buffer: compressedBuffer,
+          compressed: true,
+          metrics,
+        };
+      }
+    } catch (error: any) {
+      console.error(`Failed to compress at quality ${quality}:`, error.message);
+    }
+  }
+
+  // If we get here, compression failed even at minimum quality
+  const sizeInMB = (originalSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES);
+  const targetInMB = (targetSizeBytes / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES);
+
+  throw new Error(
+    `Image too large to compress: ${sizeInMB}MB exceeds ${targetInMB}MB limit even at quality=${minQuality}.\n` +
+    `Please resize the image manually to reduce file size before processing.`
+  );
 }
 
 export async function processHandwrittenImage(imageBuffer: Buffer, filename: string): Promise<{ text: string; modelUsed: string } | null> {
@@ -101,16 +246,36 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
     }
 
     // Preprocess the image using sharp
-    // Ensure dimensions are within provider limits (Claude: 8000px, OpenAI: generally larger but we use 7000 to be safe)
+    // Ensure dimensions are within provider limits
     const preprocessedBuffer = await sharp(imageBuffer)
-      .grayscale()                                          // Convert to grayscale
-      .resize({ width: 1600, height: 7000, fit: 'inside' }) // Resize while maintaining aspect ratio, limit both dimensions
-      .normalize()                                          // Normalize contrast and brightness
-      .sharpen({ sigma: 1.0 })                              // Enhance edges slightly
+      .grayscale()
+      .resize({ width: PREPROCESSING_WIDTH, height: PREPROCESSING_HEIGHT, fit: 'inside' })
+      .normalize()
+      .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
+      .jpeg({ quality: PREPROCESSING_QUALITY })  // High quality initial conversion, compression will reduce if needed
       .toBuffer();
 
-    const base64Image = preprocessedBuffer.toString('base64');
-    const mime = path.extname(filename).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+    // Compress image if needed (for images >5MB)
+    const compressionConfig = getCompressionConfig();
+    let finalBuffer = preprocessedBuffer;
+
+    if (compressionConfig.enabled) {
+      const compressionResult = await compressImageIfNeeded(
+        preprocessedBuffer,
+        compressionConfig.maxSizeBytes,
+        compressionConfig.minQuality
+      );
+      finalBuffer = compressionResult.buffer;
+
+      // Log compression if it occurred
+      if (compressionResult.compressed && compressionResult.metrics) {
+        const { originalSize, compressedSize, quality, ratio } = compressionResult.metrics;
+        console.log(`✓ Image compressed: ${(originalSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB → ${(compressedSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB (quality=${quality}, ratio=${ratio.toFixed(RATIO_DECIMAL_PLACES)}x)`);
+      }
+    }
+
+    const base64Image = finalBuffer.toString('base64');
+    const mime = 'image/jpeg'; // Always JPEG after preprocessing
 
     // Get domain glossary from cached reference
     const glossary = getDomainGlossary(cachedReference || {});
@@ -174,7 +339,7 @@ Requirements:
     const primaryQuality = assessOCRQuality(primaryResult, imageBuffer.length);
 
     console.log(`📊 OCR Quality Assessment:`, {
-      illegiblePercent: `${primaryQuality.illegiblePercent.toFixed(1)}%`,
+      illegiblePercent: `${primaryQuality.illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
       consecutiveIllegibles: primaryQuality.consecutiveIllegibles,
       outputLength: primaryQuality.outputLength,
       isPoorQuality: primaryQuality.isPoorQuality,
@@ -246,7 +411,7 @@ Requirements:
         const fallbackQuality = assessOCRQuality(fallbackResult, imageBuffer.length);
         console.log(`✓ Fallback model succeeded: ${fallbackResponse.model}`);
         console.log(`📊 Fallback Quality Assessment:`, {
-          illegiblePercent: `${fallbackQuality.illegiblePercent.toFixed(1)}%`,
+          illegiblePercent: `${fallbackQuality.illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
           consecutiveIllegibles: fallbackQuality.consecutiveIllegibles,
           outputLength: fallbackQuality.outputLength,
           isPoorQuality: fallbackQuality.isPoorQuality,

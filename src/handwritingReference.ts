@@ -3,6 +3,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { createConnection } from 'net';
 import { ProviderType, ModelMapping, AIProviderConfig } from './aiProvider';
+import { compressImageIfNeeded, getCompressionConfig, BYTES_PER_MB, SIZE_DECIMAL_PLACES } from './ocr';
 
 export interface DomainGlossary {
   acronyms?: Record<string, string>;
@@ -91,13 +92,9 @@ export async function loadReferenceImage(
 ): Promise<Buffer | null> {
   try {
     const resolvedPath = path.resolve(process.cwd(), imagePath);
-    const buffer = await fs.readFile(resolvedPath);
+    let buffer = await fs.readFile(resolvedPath);
 
-    // Check file size (warn if > 5MB)
-    const sizeInMB = buffer.length / (1024 * 1024);
-    if (sizeInMB > 5) {
-      console.warn(`⚠️  Reference image is large (${sizeInMB.toFixed(1)}MB). This may increase API costs.`);
-    }
+    const originalSizeInMB = buffer.length / BYTES_PER_MB;
 
     // Validate it's an image by checking file extension
     const ext = path.extname(imagePath).toLowerCase();
@@ -105,7 +102,20 @@ export async function loadReferenceImage(
       console.warn(`⚠️  Reference image should be .jpg, .jpeg, or .png (found: ${ext})`);
     }
 
-    console.log(`✓ Loaded reference image: ${imagePath} (${sizeInMB.toFixed(2)}MB)`);
+    // Compress image if needed (for images >5MB)
+    const compressionConfig = getCompressionConfig();
+    if (compressionConfig.enabled && buffer.length > compressionConfig.maxSizeBytes) {
+      console.log(`📦 Compressing reference image: ${imagePath} (${originalSizeInMB.toFixed(SIZE_DECIMAL_PLACES)}MB)`);
+      const compressionResult = await compressImageIfNeeded(
+        buffer,
+        compressionConfig.maxSizeBytes,
+        compressionConfig.minQuality
+      );
+      buffer = compressionResult.buffer;
+    } else {
+      console.log(`✓ Loaded reference image: ${imagePath} (${originalSizeInMB.toFixed(SIZE_DECIMAL_PLACES)}MB)`);
+    }
+
     return buffer;
   } catch (error: any) {
     console.warn(`⚠️  Could not load reference image at ${imagePath}:`, error.message);

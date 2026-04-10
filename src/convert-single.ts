@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import path from 'path';
-import { processHandwrittenImage } from './ocr';
+import { processHandwrittenImage, CONFIDENCE_TO_PERCENT, PERCENT_WHOLE_NUMBER } from './ocr';
 import { summarizeText } from './summarize';
 import { validateOCROutput, formatValidationReport, correctOCRIssues, getCorrectionConfig, type ValidationReport } from './ocrValidator';
 
@@ -86,7 +86,7 @@ Examples:
       console.log('🔍 Validating OCR quality...');
       validationReport = await validateOCROutput(transcription);
 
-      console.log(`📊 Quality Score: ${(validationReport.overallConfidence * 100).toFixed(0)}%`);
+      console.log(`📊 Quality Score: ${(validationReport.overallConfidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%`);
 
       if (validationReport.issueCount.critical > 0) {
         console.log(`⚠️  Found ${validationReport.issueCount.critical} critical issues`);

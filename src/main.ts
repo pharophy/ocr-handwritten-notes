@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { processHandwrittenImage } from './ocr';
+import { processHandwrittenImage, CONFIDENCE_TO_PERCENT, PERCENT_WHOLE_NUMBER } from './ocr';
 import { summarizeText } from './summarize';
 import { getAllImageFiles, fileExists } from './utils';
 import { validateOCROutput, formatValidationReport, getValidationConfig, correctOCRIssues, getCorrectionConfig, type ValidationReport } from './ocrValidator';
@@ -10,7 +10,6 @@ dotenv.config();
 const MONITORED_FOLDERS = [path.resolve('/Users/I566809/Library/CloudStorage/OneDrive-SAPSE/Notes/ZZ_Raw')];
 
 async function run() {
-  // const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
   for (const folderPath of MONITORED_FOLDERS) {
     const imageFiles = await getAllImageFiles(folderPath);
 
@@ -40,7 +39,7 @@ async function run() {
 
         // Log validation results
         if (validationReport.recommendation === 'manual-transcribe') {
-          console.log(`⚠️  ${path.basename(imagePath)} - Low quality (${(validationReport.overallConfidence * 100).toFixed(0)}%), review recommended`);
+          console.log(`⚠️  ${path.basename(imagePath)} - Low quality (${(validationReport.overallConfidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%), review recommended`);
         } else if (validationReport.issueCount.critical > 0) {
           console.log(`⚠️  ${path.basename(imagePath)} - ${validationReport.issueCount.critical} critical issues`);
         }
