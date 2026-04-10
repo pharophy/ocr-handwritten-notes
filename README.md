@@ -734,20 +734,48 @@ See [handwriting-reference.json](handwriting-reference.json) for the configurati
 
 ```
 .
-├── src/
+├── src/                           # Source code
 │   ├── main.ts                    # Main orchestrator and folder monitoring
-│   ├── ocr.ts                     # OCR processing with handwriting reference
+│   ├── ocr.ts                     # OCR processing with compression and reference
+│   ├── ocrValidator.ts            # OCR quality validation and correction
 │   ├── summarize.ts               # AI-powered summarization
+│   ├── aiProvider.ts              # AI provider abstraction (HAI/OpenAI)
 │   ├── handwritingReference.ts    # Handwriting reference management
 │   └── utils.ts                   # Utility functions
+├── tests/                         # Test suite
+│   ├── image-compression.test.ts  # Compression functionality tests
+│   ├── README.md                  # Test suite documentation
+│   └── MODELS.md                  # Available AI models reference
+├── docs/                          # Documentation
+│   ├── guides/                    # User guides
+│   │   └── testing.md             # How to run tests
+│   ├── architecture/              # Technical documentation
+│   │   └── system-architecture.md # Complete system architecture
+│   └── archive/                   # Historical documents
 ├── handwriting-samples/           # Store your handwriting reference images
 │   ├── README.md                  # Instructions for creating references
 │   └── reference-sheet.jpeg       # Your handwriting sample (create this!)
+├── openspec/                      # OpenSpec workflow management
+│   ├── specs/                     # Active specifications
+│   └── changes/                   # Change proposals and archives
 ├── handwriting-reference.json     # Handwriting reference config
 ├── .env                           # Environment variables (API key, config)
+├── CHANGELOG.md                   # Version history
+├── CONFIG.md                      # Detailed configuration guide
 ├── package.json
 └── README.md
 ```
+
+---
+
+## 📚 Documentation
+
+- **[Getting Started](README.md)** - This file - installation and quick start
+- **[Configuration Guide](CONFIG.md)** - Detailed configuration options and model selection
+- **[System Architecture](docs/architecture/system-architecture.md)** - Complete technical documentation
+- **[Testing Guide](docs/guides/testing.md)** - How to run tests
+- **[Version History](CHANGELOG.md)** - What's new in each version
+- **[Available Models](tests/MODELS.md)** - Complete AI model reference
 
 ---
 
@@ -757,6 +785,7 @@ For issues or questions:
 - Check the troubleshooting section above
 - Review console output for error messages
 - Verify all configuration files are properly formatted JSON
+- See [System Architecture](docs/architecture/system-architecture.md) for technical details
 
 ---
 
