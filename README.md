@@ -32,17 +32,28 @@ This tool supports multiple AI providers for OCR and summarization:
 ✅ **Auto-start** - Proxy starts automatically when needed  
 
 **Prerequisites:**
+
+Choose **one** of the following setup methods:
+
+**Method 1: HAI CLI (Recommended)**
 1. Install HAI CLI: [Installation Guide](https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/)
 2. Authenticate: `hai auth login`
+3. Start proxy: `hai proxy start --headless` (or enable auto-start in config)
+
+**Method 2: HAI Desktop Application**
+1. Install HAI Desktop App (if you don't have the CLI)
+2. Open the HAI app and start the proxy
+3. **Get your API key from the HAI app UI** (usually in Settings or API section)
+4. **Copy the API key to your `.env` file:**
+   ```env
+   HAI_API_KEY=your-api-key-from-hai-app
+   ```
+   
+   > **Note:** When using the HAI desktop app, you **must** manually set `HAI_API_KEY` in your `.env` file. The CLI auto-configures this, but the desktop app requires manual configuration.
 
 **Configuration:**
-No configuration needed! The system will:
-- Auto-detect HAI proxy running on port 6655
-- Auto-start HAI proxy if not running
-- Use Claude 3.5 Sonnet for OCR by default
 
-**Configuration (optional):**
-Create `.env` file to customize settings:
+For HAI CLI (auto-configured):
 ```env
 AI_PROVIDER=hai
 HAI_AUTO_START=true                # Auto-start proxy if not running
@@ -55,6 +66,22 @@ AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 
 # Automatic Fallback OCR (Recommended)
 # Automatically retries with a different model if OCR quality is poor
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini  # Cross-provider fallback
+```
+
+For HAI Desktop App (requires manual API key):
+```env
+AI_PROVIDER=hai
+HAI_API_KEY=your-api-key-from-hai-app  # ⚠️ REQUIRED for desktop app
+HAI_AUTO_START=false               # Desktop app manages proxy lifecycle
+HAI_PROXY_PORT=6655               # Default port
+
+# Optional: Customize models
+AI_MODEL_OCR=anthropic--claude-4.6-sonnet
+AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
+AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
+
+# Automatic Fallback OCR (Recommended)
 AI_MODEL_OCR_FALLBACK=gpt-4.1-mini  # Cross-provider fallback
 ```
 
@@ -91,19 +118,30 @@ AI_MODEL_OCR_FALLBACK=anthropic--claude-4.6-sonnet  # Claude fallback
 
 ### Troubleshooting AI Provider
 
+**"ANTHROPIC_AUTH_TOKEN or HAI_API_KEY is required for HAI provider"**
+- **Using HAI CLI:** Token is auto-configured. Ensure you've run `hai auth login`
+- **Using HAI Desktop App:** Copy the API key from the HAI app settings and add to `.env`:
+  ```env
+  HAI_API_KEY=your-api-key-from-hai-app
+  ```
+- **Manual proxy start:** If auto-start disabled, run `hai proxy start` before using the tool
+
 **"HAI CLI not found in PATH"**
 - Install HAI CLI: [Installation Guide](https://ai-docs.portal.hyperspace.tools.sap/llm-proxy/recipes/cline/)
 - Restart your terminal after installation
+- Or use HAI Desktop App instead (requires manual `HAI_API_KEY` configuration)
 
 **"HAI proxy is not running"**
-- Auto-start is enabled by default
+- Auto-start is enabled by default for CLI users
 - Manual start: `hai proxy start`
 - Check status: `lsof -i :6655`
 - Disable auto-start: `HAI_AUTO_START=false` in `.env`
+- For desktop app users: Start proxy from the HAI application
 
 **"OPENAI_API_KEY is required"**
 - For OpenAI direct, set `OPENAI_API_KEY` in `.env`
-- For HAI proxy, the key is managed automatically
+- For HAI proxy with CLI, the key is managed automatically
+- For HAI proxy with desktop app, set `HAI_API_KEY` in `.env`
 
 ### Step 3: Configure Your OpenAI API Key
 
@@ -383,8 +421,13 @@ All AI provider configuration is managed through environment variables in the `.
 - Usually doesn't need to be changed
 
 **`ANTHROPIC_AUTH_TOKEN`** / **`HAI_API_KEY`** - Authentication token
-- Usually auto-configured by HAI CLI
-- Rarely needs manual configuration
+- **HAI CLI:** Auto-configured by HAI CLI after `hai auth login`
+- **HAI Desktop App:** **Must be set manually** - copy from HAI app settings:
+  ```env
+  HAI_API_KEY=your-api-key-from-hai-app
+  ```
+- Both variables work interchangeably (use whichever is set)
+- Required only when using `AI_PROVIDER=hai`
 
 #### Model Selection (Optional)
 
