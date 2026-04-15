@@ -44,12 +44,14 @@ export const PERCENT_DECIMAL_PLACES = 1;   // Decimal places for percentage disp
 export const PERCENT_WHOLE_NUMBER = 0;     // Decimal places for percentage display (whole numbers)
 
 // OCR quality assessment thresholds
-const ILLEGIBLE_THRESHOLD_PERCENT = 0.15;           // 15% illegible markers triggers poor quality
+const ILLEGIBLE_THRESHOLD_PERCENT = 0.15;           // 15% illegible markers (legacy)
+const UNCERTAIN_THRESHOLD_PERCENT = 0.30;           // 30% total uncertainty (illegible + italic) triggers poor quality
 const CONSECUTIVE_ILLEGIBLE_THRESHOLD = 5;          // 5+ consecutive illegibles triggers poor quality
 const CONSECUTIVE_THRESHOLD_DEFAULT = 1;            // Default for env var OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD
 const MIN_OUTPUT_LENGTH = 50;                       // Minimum expected output length
 const MIN_IMAGE_SIZE_BYTES = 100000;                // Minimum image size (100KB) for quality assessment
 const ILLEGIBLE_PATTERN = /\*\[illegible\]\*/g;
+const ITALIC_PATTERN = /\*([^[\]]+?)\*/g;           // Pattern for italic markers (*word*)
 
 // ============================================================================
 // Cache
@@ -83,23 +85,40 @@ export function getCompressionConfig() {
 export function assessOCRQuality(transcription: string, imageSize: number): {
   isPoorQuality: boolean;
   illegiblePercent: number;
+  italicPercent: number;
+  uncertainPercent: number;
   consecutiveIllegibles: number;
   outputLength: number;
   reason?: string;
 } {
   const outputLength = transcription.length;
 
+  // Check if legacy quality check is enabled (disables italic detection)
+  const useLegacyCheck = process.env.OCR_LEGACY_QUALITY_CHECK === 'true';
+
   // Count illegible markers as single units
   const illegibleMatches = transcription.match(ILLEGIBLE_PATTERN) || [];
   const illegibleCount = illegibleMatches.length;
 
-  // Remove illegible markers and count remaining words
-  const textWithoutIllegibles = transcription.replace(ILLEGIBLE_PATTERN, '');
-  const normalWords = textWithoutIllegibles.split(/[\s\n\r,;.!?()[\]{}]+/).filter(w => w.length > 0);
+  // Count italic markers (*word*) - but not illegible markers
+  let italicCount = 0;
+  if (!useLegacyCheck) {
+    const textWithoutIllegibles = transcription.replace(ILLEGIBLE_PATTERN, '');
+    const italicMatches = textWithoutIllegibles.match(ITALIC_PATTERN) || [];
+    italicCount = italicMatches.length;
+  }
 
-  // Total words = illegible markers + normal words
-  const totalWords = illegibleCount + normalWords.length;
+  // Remove both illegible and italic markers to count remaining words
+  const textWithoutMarkers = transcription
+    .replace(ILLEGIBLE_PATTERN, '')
+    .replace(ITALIC_PATTERN, '$1'); // Keep the word but remove asterisks
+  const normalWords = textWithoutMarkers.split(/[\s\n\r,;.!?()[\]{}]+/).filter(w => w.length > 0);
+
+  // Total words = illegible markers + italic markers + normal words
+  const totalWords = illegibleCount + italicCount + normalWords.length;
   const illegiblePercent = totalWords > 0 ? (illegibleCount / totalWords) * CONFIDENCE_TO_PERCENT : 0;
+  const italicPercent = totalWords > 0 ? (italicCount / totalWords) * CONFIDENCE_TO_PERCENT : 0;
+  const uncertainPercent = illegiblePercent + italicPercent;
 
   // Detect consecutive illegible markers
   const consecutivePattern = new RegExp(`(\\*\\[illegible\\]\\*[\\s\\n\\r]*){${CONSECUTIVE_ILLEGIBLE_THRESHOLD},}`, 'g');
@@ -107,7 +126,7 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
   const consecutiveIllegibles = consecutiveMatches.length;
 
   // Quality thresholds (configurable via env vars with defaults from constants)
-  const illegibleThreshold = parseFloat(process.env.OCR_ILLEGIBLE_THRESHOLD || String(ILLEGIBLE_THRESHOLD_PERCENT * CONFIDENCE_TO_PERCENT));
+  const uncertainThreshold = parseFloat(process.env.OCR_UNCERTAIN_THRESHOLD || String(UNCERTAIN_THRESHOLD_PERCENT * CONFIDENCE_TO_PERCENT));
   const consecutiveThreshold = parseInt(process.env.OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD || String(CONSECUTIVE_THRESHOLD_DEFAULT), 10);
   const minLengthThreshold = parseInt(process.env.OCR_MIN_LENGTH_THRESHOLD || String(MIN_OUTPUT_LENGTH), 10);
   const minImageSize = parseInt(process.env.OCR_MIN_IMAGE_SIZE || String(MIN_IMAGE_SIZE_BYTES), 10);
@@ -116,9 +135,9 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
   let isPoorQuality = false;
   let reason: string | undefined;
 
-  if (illegiblePercent > illegibleThreshold) {
+  if (uncertainPercent > uncertainThreshold) {
     isPoorQuality = true;
-    reason = `High illegible percentage: ${illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}% (threshold: ${illegibleThreshold}%)`;
+    reason = `High uncertainty: ${uncertainPercent.toFixed(PERCENT_DECIMAL_PLACES)}% (${illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}% illegible + ${italicPercent.toFixed(PERCENT_DECIMAL_PLACES)}% italic, threshold: ${uncertainThreshold}%)`;
   } else if (consecutiveIllegibles >= consecutiveThreshold) {
     isPoorQuality = true;
     reason = `Consecutive illegible markers detected: ${consecutiveIllegibles} occurrences (threshold: ${consecutiveThreshold})`;
@@ -130,6 +149,8 @@ export function assessOCRQuality(transcription: string, imageSize: number): {
   return {
     isPoorQuality,
     illegiblePercent,
+    italicPercent,
+    uncertainPercent,
     consecutiveIllegibles,
     outputLength,
     reason,
@@ -224,6 +245,70 @@ export async function compressImageIfNeeded(
   );
 }
 
+/**
+ * Post-process OCR output to condense multi-line bullets
+ * Combines continuation lines within the same bullet point
+ */
+export function condenseBulletLines(text: string): string {
+  const lines = text.split('\n');
+  const condensed: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Empty line - keep as is
+    if (trimmed === '') {
+      condensed.push(line);
+      i++;
+      continue;
+    }
+
+    // Check if this is a bullet line (starts with -, •, *, or #)
+    const isBullet = /^[-•*#]/.test(trimmed);
+
+    if (isBullet) {
+      // This is a bullet - collect all continuation lines
+      let bulletContent = line;
+      let j = i + 1;
+
+      // Look ahead for continuation lines (indented, not a new bullet)
+      while (j < lines.length) {
+        const nextLine = lines[j];
+        const nextTrimmed = nextLine.trim();
+
+        // Stop at empty line
+        if (nextTrimmed === '') {
+          break;
+        }
+
+        // Stop if next line is a new bullet at same or less indentation
+        const nextIsBullet = /^[-•*#]/.test(nextTrimmed);
+        const currentIndent = line.length - line.trimStart().length;
+        const nextIndent = nextLine.length - nextLine.trimStart().length;
+
+        if (nextIsBullet && nextIndent <= currentIndent) {
+          break;
+        }
+
+        // This is a continuation - append to current bullet
+        bulletContent += ' ' + nextTrimmed;
+        j++;
+      }
+
+      condensed.push(bulletContent);
+      i = j;
+    } else {
+      // Not a bullet - keep as is
+      condensed.push(line);
+      i++;
+    }
+  }
+
+  return condensed.join('\n');
+}
+
 export async function processHandwrittenImage(imageBuffer: Buffer, filename: string): Promise<{ text: string; modelUsed: string } | null> {
   try {
     // Load handwriting reference and AI provider (cached after first load)
@@ -280,42 +365,22 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
     // Get domain glossary from cached reference
     const glossary = getDomainGlossary(cachedReference || {});
 
+    // OPTIMIZED PROMPT (91% accuracy from experimentation)
+    // Based on "precise-minimal" prompt that achieved 91.06% accuracy with 0% uncertainty markers
     const systemPrompt = `
-You are a handwriting transcription expert. Your role is to accurately transcribe handwritten notes exactly as they appear.
+Transcribe handwritten notes exactly as written. Preserve layout, indentation, and bullets.
 
-Key principles:
-- Transcribe every word, symbol, and punctuation mark precisely as written
-- Preserve the exact visual layout: indentation, bullets, spacing, line breaks
-- If text is unclear, make your best educated guess using context from the domain glossary below
-- Only mark a word as uncertain with *italics* if you truly cannot read it
-- Keep ALL-CAPS words fully capitalized (they are often acronyms)
-- Transcribe arrows as '→'
-- Never skip, merge, or summarize content
-- Do not add interpretation, structure, or formatting beyond what is clearly visible
+Do not use *italics* or uncertainty markers. Always give your best interpretation of unclear text.
 
-IMPORTANT - Common handwriting confusion patterns to watch for:
-- "home" vs "book" - in context of living/vacation, likely "home"
-- "sign" vs "issues" - in context of contracts/agreements, likely "sign"
-- "upfront" vs "customer" - in context of payments/money, likely "upfront"
-- Numbers: "2/26" means February 26th, not "3/26"
+Keep acronyms in ALL-CAPS. Use '-' for bullets, '→' for arrows.
 
-${cachedReferenceImage ? formatReferenceImageInstructions() : ''}
-${!cachedReferenceImage && cachedReference ? formatReferenceWordsForPrompt(cachedReference) : ''}
 ${formatGlossaryContext(glossary)}
 `;
 
     const userPrompt = `
-Transcribe the handwritten notes in this image into Markdown, preserving the original structure.
+Transcribe this handwritten image precisely. Preserve all formatting.
 
-Requirements:
-- Transcribe every word and symbol exactly as written
-- Preserve indentation, bullets, and line breaks
-- Use '-' for bullet points
-- Use '→' for arrows
-- Keep acronyms in ALL-CAPS
-- Only use *italics* for truly illegible words
-- Do not add structure or formatting beyond what is clearly visible
-- Output only the transcribed text, no explanation
+Output only the transcribed text, no explanation.
 `;
 
     // Build combined prompt including reference image context if available
@@ -340,6 +405,8 @@ Requirements:
 
     console.log(`📊 OCR Quality Assessment:`, {
       illegiblePercent: `${primaryQuality.illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
+      italicPercent: `${primaryQuality.italicPercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
+      uncertainPercent: `${primaryQuality.uncertainPercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
       consecutiveIllegibles: primaryQuality.consecutiveIllegibles,
       outputLength: primaryQuality.outputLength,
       isPoorQuality: primaryQuality.isPoorQuality,
@@ -380,7 +447,8 @@ Requirements:
           // Unknown provider type
           console.log(`⚠️  Unknown provider type: ${currentConfig.type}, skipping fallback`);
           console.log(`✓ Primary model succeeded: ${response.model}`);
-          return { text: primaryResult, modelUsed: response.model };
+          const condensedPrimary = condenseBulletLines(primaryResult);
+          return { text: condensedPrimary, modelUsed: response.model };
         }
 
         // Create fallback provider config by copying current config
@@ -404,7 +472,8 @@ Requirements:
         const fallbackResult = fallbackResponse.content || null;
         if (!fallbackResult) {
           console.log(`❌ Fallback model returned no result, using primary result`);
-          return { text: primaryResult, modelUsed: `${response.model} (primary)` };
+          const condensedPrimary = condenseBulletLines(primaryResult);
+          return { text: condensedPrimary, modelUsed: `${response.model} (primary)` };
         }
 
         // Assess fallback quality
@@ -412,6 +481,8 @@ Requirements:
         console.log(`✓ Fallback model succeeded: ${fallbackResponse.model}`);
         console.log(`📊 Fallback Quality Assessment:`, {
           illegiblePercent: `${fallbackQuality.illegiblePercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
+          italicPercent: `${fallbackQuality.italicPercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
+          uncertainPercent: `${fallbackQuality.uncertainPercent.toFixed(PERCENT_DECIMAL_PLACES)}%`,
           consecutiveIllegibles: fallbackQuality.consecutiveIllegibles,
           outputLength: fallbackQuality.outputLength,
           isPoorQuality: fallbackQuality.isPoorQuality,
@@ -422,16 +493,19 @@ Requirements:
         }
 
         // Always return fallback result when fallback was triggered
-        return { text: fallbackResult, modelUsed: `${fallbackResponse.model} (fallback from ${response.model})` };
+        const condensedFallback = condenseBulletLines(fallbackResult);
+        return { text: condensedFallback, modelUsed: `${fallbackResponse.model} (fallback from ${response.model})` };
 
       } catch (fallbackError: any) {
         console.error(`❌ Fallback model API error: ${fallbackError?.response?.data || fallbackError.message}, returning primary result`);
-        return { text: primaryResult, modelUsed: `${response.model} (primary, fallback failed)` };
+        const condensedPrimary = condenseBulletLines(primaryResult);
+        return { text: condensedPrimary, modelUsed: `${response.model} (primary, fallback failed)` };
       }
     }
 
     console.log(`✓ Primary model succeeded: ${response.model}`);
-    return { text: primaryResult, modelUsed: response.model };
+    const condensedPrimary = condenseBulletLines(primaryResult);
+    return { text: condensedPrimary, modelUsed: response.model };
   } catch (error: any) {
     console.error('❌ OCR failed:', error?.response?.data || error.message);
     return null;

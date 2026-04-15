@@ -774,8 +774,254 @@ See [handwriting-reference.json](handwriting-reference.json) for the configurati
 - **[Configuration Guide](CONFIG.md)** - Detailed configuration options and model selection
 - **[System Architecture](docs/architecture/system-architecture.md)** - Complete technical documentation
 - **[Testing Guide](docs/guides/testing.md)** - How to run tests
+- **[OCR Testing Framework](#-ocr-testing-framework)** - OCR accuracy testing and experimentation
 - **[Version History](CHANGELOG.md)** - What's new in each version
 - **[Available Models](tests/MODELS.md)** - Complete AI model reference
+
+---
+
+## 🧪 OCR Testing Framework
+
+The OCR Testing Framework provides automated testing and experimentation capabilities to measure and improve OCR accuracy for handwritten notes.
+
+### Features
+
+- **Automated Testing**: Compare OCR output against expected (gold standard) text
+- **Accuracy Metrics**: Character-level accuracy, word F1 score, edit distance
+- **Baseline Tracking**: Track improvements/regressions over time
+- **Model Experimentation**: Systematically test different AI models
+- **Prompt Experimentation**: Test different prompting strategies
+- **Preprocessing Experimentation**: Test image preprocessing variations
+- **Scoring & Recommendations**: Weighted scoring with automatic best-config selection
+- **Experiment History**: Persistent storage of all experiment results
+
+### Quick Start
+
+#### 1. Create Test Cases
+
+Test cases consist of paired files in `test-images/`:
+- **Input**: `<name>.jpeg` - Your handwritten note image
+- **Expected**: `<name> expected.txt` - Gold standard transcription
+
+Example:
+```
+test-images/
+├── Meeting Notes.jpeg
+└── Meeting Notes expected.txt
+```
+
+See [test-images/README.md](test-images/README.md) for format details.
+
+#### 2. Run a Single Test
+
+```bash
+npm run test-ocr "test-images/Meeting Notes.jpeg"
+```
+
+Output includes:
+- Character accuracy (%)
+- Word precision/recall/F1
+- Edit distance
+- Italic marker count
+- Pass/fail status
+- Unified diff (if failed with `--show-diff`)
+
+#### 3. Run Full Test Suite
+
+```bash
+npm run test-ocr-suite
+```
+
+Runs all test cases in `test-images/` and generates summary report.
+
+#### 4. Run Model Experiments
+
+Test different AI models to find the best for your handwriting:
+
+```bash
+# Test all available models
+npm run experiment-ocr "test-images/Meeting Notes.jpeg"
+
+# Test specific models
+npm run experiment-ocr "test-images/Meeting Notes.jpeg" -- --type=model --models=opus,gpt4o
+```
+
+Results include:
+- Tabular comparison (accuracy, cost, latency, score)
+- Recommended configuration with rationale
+- Experiment history stored in `test-results/experiments/`
+
+### Testing Commands
+
+**Single Test:**
+```bash
+npm run test-ocr <image-path> [options]
+
+Options:
+  --show-diff              Show line-by-line diff for failures
+  --format=console|json|markdown
+  --min-accuracy=N         Character accuracy threshold (default: 80)
+  --min-f1=N               Word F1 threshold (default: 0.7)
+  --compare-baseline       Compare against baseline
+```
+
+**Test Suite:**
+```bash
+npm run test-ocr-suite [options]
+
+Options:
+  --directory=DIR          Test images directory (default: test-images)
+  --format=console|markdown|json
+  --output=FILE            Save report to file
+```
+
+**Model Experiments:**
+```bash
+npm run experiment-ocr <image-path> [options]
+
+Options:
+  --type=TYPE              model|prompt|preprocessing|combined
+  --models=LIST            Comma-separated models (e.g., opus,gpt4o)
+  --prompts=LIST           Comma-separated prompts
+  --preprocessing=LIST     Comma-separated preprocessing configs
+  --weights=W1,W2,W3       Score weights: accuracy,cost,latency
+  --format=console|markdown|json
+  --output=FILE            Save report to file
+```
+
+### Available Models
+
+Use these model identifiers with `--models`:
+
+- `claude-sonnet-4.6` - Claude 4.6 Sonnet (default)
+- `claude-opus-4-6` - Claude 4.6 Opus
+- `gpt-4o` - GPT-4o
+- `gpt-4-vision-preview` - GPT-4 Vision
+
+### Baseline Tracking
+
+Establish a baseline to track improvements over time:
+
+```bash
+# Run test and compare to baseline
+npm run test-ocr "test-images/Meeting Notes.jpeg" -- --compare-baseline
+```
+
+Baseline metrics are stored in `test-results/baseline.json` and include:
+- Model used
+- Accuracy metrics (character accuracy, word F1, etc.)
+- Processing time
+- Cost estimate
+- Timestamp
+
+### Experiment Types
+
+**Model Experiments** (`--type=model`):
+- Test different AI models (Claude, GPT-4o, etc.)
+- Find the best model for your handwriting style
+
+**Prompt Experiments** (`--type=prompt`):
+- Test different prompting strategies
+- Options: `baseline`, `verbose`, `concise`, `with-glossary`
+
+**Preprocessing Experiments** (`--type=preprocessing`):
+- Test image preprocessing variations
+- Options: `none`, `light-sharpen`, `heavy-sharpen`, `contrast-boost`, `full-enhancement`
+
+**Combined Experiments** (`--type=combined`):
+- Test all combinations of models, prompts, and preprocessing
+- Example: 3 models × 2 prompts = 6 configurations tested
+
+### Scoring Algorithm
+
+Results are scored using a weighted composite (default weights):
+- **Accuracy**: 70% weight - Character-level accuracy (0-100%)
+- **Cost**: 15% weight - Lower cost is better
+- **Latency**: 15% weight - Lower processing time is better
+
+Customize weights:
+```bash
+npm run experiment-ocr "test.jpeg" -- --weights=0.8,0.1,0.1
+```
+
+### Test Metrics
+
+**Character-Level:**
+- Accuracy: % of characters correctly transcribed
+- Edit Distance: Levenshtein distance between actual and expected
+
+**Word-Level:**
+- Precision: % of transcribed words that are correct
+- Recall: % of expected words that were found
+- F1 Score: Harmonic mean of precision and recall
+
+**Quality Indicators:**
+- Italic Count: Number of uncertain words marked with `*asterisks*`
+- Italic Percentage: % of words marked as uncertain
+
+### Directory Structure
+
+```
+test-images/           # Test cases (image + expected output pairs)
+test-results/          # Test results and history
+├── baseline.json      # Current baseline metrics
+└── experiments/       # Historical experiment results
+    ├── <test>-model-<timestamp>.json
+    └── <test>-prompt-<timestamp>.json
+```
+
+### Creating Test Cases
+
+1. **Prepare image**: Take a clear photo of your handwritten notes
+2. **Create expected output**: Manually transcribe to `<name> expected.txt`
+   - Preserve formatting (bullets, indentation, line breaks)
+   - Use `-` for bullets, `→` for arrows
+   - Keep acronyms in ALL-CAPS
+3. **Save files**: 
+   - `test-images/<name>.jpeg`
+   - `test-images/<name> expected.txt`
+4. **Run test**: `npm run test-ocr "test-images/<name>.jpeg"`
+
+See [test-images/README.md](test-images/README.md) for detailed format guidelines.
+
+### Environment Variables
+
+Fine-tune testing behavior:
+
+```env
+# OCR quality thresholds
+OCR_UNCERTAIN_THRESHOLD=0.30     # Trigger fallback if >30% uncertain
+OCR_LEGACY_QUALITY_CHECK=false   # Disable italic detection
+
+# Experiment defaults (optional)
+OCR_EXPERIMENT_TYPE=model        # Default experiment type
+OCR_SCORE_WEIGHTS=0.7,0.15,0.15 # accuracy,cost,latency
+```
+
+### Troubleshooting
+
+**"Expected output file not found"**
+- Ensure `<name> expected.txt` exists alongside `<name>.jpeg`
+- Check file naming convention matches exactly
+
+**"No test cases discovered"**
+- Verify `.jpeg` files have matching ` expected.txt` files
+- Check directory path is correct
+
+**"Test failed with low accuracy"**
+- Review diff output (`--show-diff`) to see specific errors
+- Consider adding domain-specific terms to `handwriting-reference.json`
+- Try different models with experiment mode
+
+**"Experiment results not persisted"**
+- Verify `test-results/experiments/` directory is writable
+- Check console for storage error messages
+
+For more details, see the testing documentation in [test-images/README.md](test-images/README.md) and [test-results/README.md](test-results/README.md).
+
+---
+
+## 📚 Documentation
 
 ---
 

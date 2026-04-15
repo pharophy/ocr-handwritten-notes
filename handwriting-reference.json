@@ -29,6 +29,7 @@
       "OKRs": "Objectives and Key Results",
       "API": "Application Programming Interface",
       "POC": "Proof of Concept",
+      "PoC": "Proof of Concept",
       "REQS": "Requirements",
       "US": "United States",
       "PVG": "Location name, preserve capitalization",
@@ -46,14 +47,29 @@
       "Joule": "SAP's AI assistant",
       "ITCM": "Software product",
       "RGO": "Software product",
-      "ORA": "Order reliability agent, software product"
+      "ORA": "Order reliability agent, software product",
+      "BTP": "Business Technology Platform, SAP cloud platform",
+      "DT": "Dynatrace",
+      "SPN": "Service Principal Name, Azure authentication",
+      "K8s": "Kubernetes",
+      "ArgoCD": "GitOps continuous delivery tool",
+      "CAM": "Cloud Application Manager",
+      "CIC": "Cloud Integration Cell",
+      "EDE": "Enterprise Development Environment",
+      "Kyma": "Kubernetes-based application runtime",
+      "e2e": "end-to-end"
     },
     "properNouns": [
       "Pepsi",
       "Canada",
       "Cosine",
       "Course",
-      "Vacation"
+      "Vacation",
+      "Dynatrace",
+      "Vault",
+      "Azure",
+      "JIRA",
+      "Pruthvi"
     ],
     "businessTerms": [
       "onboarding",
@@ -68,7 +84,10 @@
       "redundancy",
       "workshop",
       "upfront",
-      "subsidize"
+      "subsidize",
+      "service binding",
+      "multi-values file",
+      "orphan instance"
     ],
     "specialNotation": {
       "arrow": "→",
