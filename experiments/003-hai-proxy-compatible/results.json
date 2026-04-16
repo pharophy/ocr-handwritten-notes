@@ -1,0 +1,62 @@
+{
+  "id": "Dynatrace-Q2-04-09-model-1776296888529",
+  "testName": "Dynatrace Q2 04-09",
+  "experimentType": "model",
+  "timestamp": "2026-04-15T23:48:08.528Z",
+  "results": [
+    {
+      "configName": "Claude 4.6 Sonnet",
+      "modelUsed": "Claude 4.6 Sonnet",
+      "accuracy": 90.26812313803376,
+      "wordF1": 0.6043956043956045,
+      "costEstimate": 0.12348599999999998,
+      "processingTime": 52592,
+      "italicPercentage": 0,
+      "score": 63.18768619662362
+    },
+    {
+      "configName": "Claude 4.6 Opus",
+      "modelUsed": "Claude 4.6 Opus",
+      "accuracy": 90.16881827209534,
+      "wordF1": 0.5917808219178082,
+      "costEstimate": 0.6174299999999999,
+      "processingTime": 30465,
+      "italicPercentage": 0,
+      "score": 63.11817279046673
+    },
+    {
+      "configName": "GPT-5",
+      "modelUsed": "GPT-5",
+      "accuracy": 82.32373386295929,
+      "wordF1": 0.5904255319148937,
+      "costEstimate": 0.102905,
+      "processingTime": 55423,
+      "italicPercentage": 0,
+      "score": 57.626613704071495
+    },
+    {
+      "configName": "GPT-5 Mini",
+      "modelUsed": "GPT-5 Mini",
+      "accuracy": 91.16186693147964,
+      "wordF1": 0.5876010781671158,
+      "costEstimate": 0.020581,
+      "processingTime": 51576,
+      "italicPercentage": 0,
+      "score": 75.72615685203574
+    },
+    {
+      "configName": "GPT-4.1 Mini",
+      "modelUsed": "GPT-4.1 Mini",
+      "accuracy": 85.60079443892751,
+      "wordF1": 0.5983827493261455,
+      "costEstimate": 0.020581,
+      "processingTime": 39732,
+      "italicPercentage": 0.47393364928909953,
+      "score": 71.83340610724926
+    }
+  ],
+  "recommendation": {
+    "configName": "GPT-5 Mini",
+    "score": 75.72615685203574
+  }
+}

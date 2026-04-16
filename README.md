@@ -959,6 +959,51 @@ npm run experiment-ocr "test.jpeg" -- --weights=0.8,0.1,0.1
 - Italic Count: Number of uncertain words marked with `*asterisks*`
 - Italic Percentage: % of words marked as uncertain
 
+### 🔬 Structured Experimentation Workflow
+
+For systematic OCR improvement experiments, use the `/experiment-ocr` skill:
+
+```bash
+# Ideate new experiments based on current findings
+/experiment-ocr
+
+# The skill will:
+# 1. Review recent experiments and known issues
+# 2. Propose 3-5 experiment ideas with impact/effort analysis
+# 3. Help you design hypothesis, methodology, success criteria
+# 4. Create organized experiment folder with documentation
+# 5. Execute the experiment with proper tooling
+# 6. Analyze results and document findings
+# 7. Update experiment summary automatically
+```
+
+**Experiment Organization:**
+
+Each experiment is self-contained in `experiments/XXX-name/`:
+```
+experiments/
+├── README.md                    # Experiment catalog and templates
+├── 001-initial-model-comparison/
+│   ├── hypothesis.md            # What we're testing and why
+│   ├── results.json             # Raw experimental data
+│   ├── findings.md              # Analysis and conclusions
+│   └── artifacts/               # Supporting files
+├── 002-full-model-suite/
+└── 003-hai-proxy-compatible/
+```
+
+**Key Benefits:**
+- ✅ **Structured approach** - Clear hypothesis → methodology → findings
+- ✅ **Historical tracking** - All experiments documented with context
+- ✅ **Reproducible** - Methodology and configurations saved
+- ✅ **Knowledge building** - Each experiment informs the next
+- ✅ **Automated summary** - `npm run generate-experiment-summary`
+
+**Documentation:**
+- `EXPERIMENTS.md` - Overview of all experiments with key findings
+- `OCR_MODEL_SELECTION.md` - Current model recommendations
+- `experiments/README.md` - Experiment templates and guidelines
+
 ### Directory Structure
 
 ```

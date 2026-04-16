@@ -1,0 +1,32 @@
+{
+  "id": "Dynatrace-Q2-04-09-model-1776289402753",
+  "testName": "Dynatrace Q2 04-09",
+  "experimentType": "model",
+  "timestamp": "2026-04-15T21:43:22.753Z",
+  "results": [
+    {
+      "configName": "Claude 4.6 Sonnet",
+      "modelUsed": "Claude 4.6 Sonnet",
+      "accuracy": 90.56603773584906,
+      "wordF1": 0.5721784776902887,
+      "costEstimate": 0.12348599999999998,
+      "processingTime": 15010,
+      "italicPercentage": 0,
+      "score": 70.89122641509434
+    },
+    {
+      "configName": "GPT-4o",
+      "modelUsed": "GPT-4o",
+      "accuracy": 91.26117179741807,
+      "wordF1": 0.5842105263157895,
+      "costEstimate": 0.102905,
+      "processingTime": 13890,
+      "italicPercentage": 0,
+      "score": 71.93782025819264
+    }
+  ],
+  "recommendation": {
+    "configName": "GPT-4o",
+    "score": 71.93782025819264
+  }
+}

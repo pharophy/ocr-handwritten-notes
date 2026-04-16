@@ -1,0 +1,52 @@
+{
+  "id": "Dynatrace-Q2-04-09-model-1776291549060",
+  "testName": "Dynatrace Q2 04-09",
+  "experimentType": "model",
+  "timestamp": "2026-04-15T22:19:09.059Z",
+  "results": [
+    {
+      "configName": "Claude 4.6 Sonnet",
+      "modelUsed": "Claude 4.6 Sonnet",
+      "accuracy": 60.97318768619663,
+      "wordF1": 0.5445544554455446,
+      "costEstimate": 0.12348599999999998,
+      "processingTime": 16502,
+      "italicPercentage": 38.23529411764706,
+      "score": 49.430231380337645
+    },
+    {
+      "configName": "Claude 4.6 Opus",
+      "modelUsed": "Claude 4.6 Opus",
+      "accuracy": 55.610724925521346,
+      "wordF1": 0.5378973105134475,
+      "costEstimate": 0.6174299999999999,
+      "processingTime": 16154,
+      "italicPercentage": 39.473684210526315,
+      "score": 45.85050744786494
+    },
+    {
+      "configName": "GPT-4o",
+      "modelUsed": "GPT-4o",
+      "accuracy": 80.63555114200595,
+      "wordF1": 0.5655526992287917,
+      "costEstimate": 0.102905,
+      "processingTime": 14014,
+      "italicPercentage": 25,
+      "score": 64.43788579940416
+    },
+    {
+      "configName": "GPT-4 Vision",
+      "modelUsed": "GPT-4 Vision",
+      "accuracy": 6.256206554121152,
+      "wordF1": 0.490066225165563,
+      "costEstimate": 0.41162,
+      "processingTime": 18841,
+      "italicPercentage": 44.370860927152314,
+      "score": 9.958844587884805
+    }
+  ],
+  "recommendation": {
+    "configName": "GPT-4o",
+    "score": 64.43788579940416
+  }
+}
