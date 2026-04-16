@@ -48,6 +48,13 @@ The system SHALL execute test cases and generate comprehensive accuracy reports.
 ### Requirement: Baseline tracking and comparison
 The system SHALL maintain baseline test results and compare new test runs against the baseline to measure improvement or regression.
 
+#### Scenario: Baseline storage format
+- **WHEN** storing baseline results
+- **THEN** the system SHALL use a structured JSON format with:
+  - `version` field indicating baseline format version
+  - `baselines` object containing test results keyed by test case name
+  - Each baseline SHALL include: testCase name, model, timestamp, metrics, processingTime, costEstimate
+
 #### Scenario: Baseline storage
 - **WHEN** a test run completes and baseline results do not exist
 - **THEN** the system SHALL store the test results as the baseline including model name, accuracy metrics, cost estimate, and timestamp
@@ -62,11 +69,11 @@ The system SHALL maintain baseline test results and compare new test runs agains
 
 #### Scenario: Baseline update
 - **WHEN** a new configuration demonstrates consistent improvement across multiple test cases
-- **THEN** the system SHALL support updating the baseline to reflect the new standard for future comparisons
+- **THEN** the system SHALL support updating the baseline to reflect the new standard for future comparisons via `updateBaseline()` function
 
 #### Scenario: Regression detection
 - **WHEN** new test results show decreased accuracy or increased cost compared to baseline
-- **THEN** the system SHALL clearly flag these regressions in the test report
+- **THEN** the system SHALL clearly flag these regressions in the test report with ⚠️ indicators
 
 ### Requirement: Test report formatting
 The system SHALL generate human-readable test reports with clear success/failure indicators.
@@ -86,10 +93,24 @@ The system SHALL generate human-readable test reports with clear success/failure
 ### Requirement: Test command interface
 The system SHALL provide a command-line interface for running OCR tests.
 
-#### Scenario: Test command
+#### Scenario: Test command with options
 - **WHEN** user runs the test command with a test image path
 - **THEN** the system SHALL execute the test and report results
+- **AND** SHALL support options:
+  - `--show-diff` to display detailed line-by-line differences
+  - `--format=console|json|markdown` to control output format
+  - `--min-accuracy=N` to set character accuracy threshold (default: 80)
+  - `--min-f1=N` to set word F1 threshold (default: 0.7)
+  - `--compare-baseline` to compare against stored baseline
 
 #### Scenario: Test suite command
 - **WHEN** user runs the test suite command
 - **THEN** the system SHALL discover and run all test cases with expected outputs in the test directory
+- **AND** SHALL support batch execution with aggregate reporting
+
+#### Scenario: CLI implementation
+- **WHEN** running test commands
+- **THEN** the system SHALL:
+  - Load environment variables via dotenv for configuration
+  - Use npm scripts: `npm run test-ocr`, `npm run test-ocr-suite`
+  - Exit with code 0 on pass, code 1 on failure for CI/CD integration
