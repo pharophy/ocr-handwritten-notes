@@ -1,204 +1,409 @@
-# Test Configuration Files
+# Configuration Guide
 
-This directory contains pre-configured `.env.proxy.*` files for testing different AI providers.
+Complete guide to configuring AI models, providers, and OCR settings based on comprehensive testing and experimentation.
 
-## Available Configurations
+---
 
-| File | Provider | Description |
-|------|----------|-------------|
-| `.env.proxy.claude` | Claude via HAI Proxy | Claude 4.6 Sonnet for OCR, Haiku for summarization (Recommended) |
-| `.env.proxy.openai` | OpenAI via HAI Proxy | GPT-5 for OCR, GPT-5 Mini for summarization |
-| `.env.direct.openai` | OpenAI Direct API | GPT-5 for OCR (requires API key) |
+## 📊 Quick Model Selection (Based on Experiments)
 
-## Quick Start
-
-### Test a specific provider
-
-```bash
-# Test Claude models
-cp .env.proxy.claude .env
-npm start
-
-# Test OpenAI models (via HAI proxy)
-cp .env.proxy.openai .env
-npm start
-
-# Test OpenAI direct (set your API key first!)
-cp .env.direct.openai .env
-# Edit .env and add your OPENAI_API_KEY
-npm start
-```
-
-### Run automated tests
-
-```bash
-# Test all models (10 models, ~10-15 minutes)
-./tests/test-all-models.sh
-
-# Test specific provider
-./tests/test-claude.sh    # 6 Claude models
-./tests/test-openai.sh    # 4 OpenAI models
-
-# Interactive launcher
-./test-models.sh
-```
-
-## Configuration Details
-
-### `.env.proxy.claude`
-- **Provider**: HAI Proxy with Claude
-- **OCR Model**: `anthropic--claude-4.6-sonnet` (latest, recommended)
-- **OCR Fallback**: `gpt-4.1-mini` (cross-provider automatic fallback)
-- **Summarization**: `anthropic--claude-4.5-haiku` (fast, cost-effective)
-- **Validation**: `anthropic--claude-4.5-haiku`
-- **Best For**: Handwriting OCR, zero cost for SAP employees, automatic quality improvement
-
-### `.env.proxy.openai`
-- **Provider**: HAI Proxy with OpenAI
-- **OCR Model**: `gpt-5` (latest, best accuracy)
-- **OCR Fallback**: `anthropic--claude-4.6-sonnet` (cross-provider automatic fallback)
-- **Summarization**: `gpt-5-mini` (fast, cost-effective)
-- **Validation**: `gpt-5-mini`
-- **Best For**: Latest GPT models, zero cost for SAP employees
-
-### `.env.direct.openai`
-- **Provider**: OpenAI Direct API
-- **OCR Model**: `gpt-5` (latest)
-- **OCR Fallback**: `gpt-4.1-mini` (same-provider fallback)
-- **Summarization**: `gpt-5-mini`
-- **Validation**: `gpt-5-mini`
-- **Best For**: Non-SAP users, requires OpenAI API key
-- **⚠️ Important**: Set `OPENAI_API_KEY` before using
-
-## Model Selection
-
-You can customize which model to use for each operation by editing the `.env` file:
-
+**Recommended for most users:**
 ```env
-# Vision model for OCR (handwriting recognition)
-AI_MODEL_OCR=anthropic--claude-4.6-sonnet
-
-# Fallback model when primary OCR quality is poor (automatic retry)
-AI_MODEL_OCR_FALLBACK=gpt-4.1-mini
-
-# Text model for summarization
+AI_MODEL_OCR=gpt-5-mini                          # Winner: 91.2% accuracy, $0.02/image
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini              # Fallback: 85.6% accuracy, $0.02/image
 AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
-
-# Text model for validation
 AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 ```
 
-### Automatic OCR Fallback
+**Why GPT-5 Mini?** See [experiments/003-hai-proxy-compatible/findings.md](experiments/003-hai-proxy-compatible/findings.md)
+- 91.2% accuracy (best of all tested models)
+- $0.02/image (83% cheaper than Claude Sonnet)
+- 0% uncertainty markers (confident output)
+- Available via HAI proxy (zero cost for SAP employees)
 
-The system automatically retries OCR with a fallback model when primary quality is poor:
-- Triggers on >15% illegible markers, 5+ consecutive illegibles, or very short output
-- Cross-provider fallback recommended (Claude → OpenAI or vice versa)
-- Dramatically improves accuracy on challenging handwriting
-- See README.md for detailed configuration and tuning options
+---
 
-See [tests/MODELS.md](tests/MODELS.md) for complete list of available models.
+## 📁 Available Configuration Files
 
-## Test Scripts Usage
+Pre-configured `.env.*` templates for quick setup:
 
-All test scripts are located in the `tests/` directory and will:
-1. Backup your current `.env`
-2. Test each model for the provider
-3. Generate detailed results in `test-results/`
-4. Restore your original `.env`
+| File | Provider | Primary Model | Best For | Accuracy | Cost |
+|------|----------|---------------|----------|----------|------|
+| `.env` | HAI Proxy | **GPT-5 Mini** ⭐ | Current production config | 91.2% | $0.02 |
+| `.env.proxy.openai` | HAI Proxy | GPT-5 | Latest GPT models | 82.3% | $0.10 |
+| `.env.proxy.claude` | HAI Proxy | Claude 4.6 Sonnet | High accuracy, more expensive | 90.3% | $0.12 |
+| `.env.direct.openai` | OpenAI Direct | GPT-5 | Non-SAP users (requires API key) | 82.3% | $0.10 |
 
-Results are saved to:
-- `test-results/claude-comparison-{timestamp}.txt`
-- `test-results/openai-comparison-{timestamp}.txt`
-- `test-results/complete-comparison-{timestamp}.txt` (combined)
+---
 
-## Creating Custom Configurations
+## 🚀 Quick Start
 
-To create your own test configuration:
+### 1. Using Current Production Config (Recommended)
 
+Already configured for best results:
 ```bash
-# Copy a template
-cp .env.proxy.claude .env.proxy.custom
-
-# Edit the file
-# - Change AI_MODEL_OCR to your preferred vision model
-# - Change AI_MODEL_SUMMARIZATION to your preferred text model
-# - Adjust any other settings
-
-# Use it
-cp .env.proxy.custom .env
+# Your .env is already set to GPT-5 Mini
 npm start
 ```
 
-## Troubleshooting
+### 2. Test a Different Configuration
 
-**HAI Proxy not starting?**
 ```bash
-# Check if already running
+# Try Claude models (more expensive but good)
+cp .env.proxy.claude .env
+npm start
+
+# Try OpenAI GPT-5 (larger model, more cost)
+cp .env.proxy.openai .env
+npm start
+
+# Restore production config
+git checkout .env
+```
+
+### 3. Create Custom Configuration
+
+```bash
+# Copy a template
+cp .env.proxy.openai .env.custom
+
+# Edit .env.custom with your preferred models
+# Then use it:
+cp .env.custom .env
+npm start
+```
+
+---
+
+## 🔍 Model Selection Guide
+
+### HAI Proxy Available Models (Verified 2026-04-16)
+
+Based on experiments testing actual HAI proxy availability:
+
+#### OpenAI Models (via HAI Proxy)
+
+| Model | Accuracy | Cost/Image | Speed | Use Case | Experiment |
+|-------|----------|------------|-------|----------|------------|
+| **gpt-5-mini** ⭐ | 91.2% | $0.02 | 51.6s | **Production OCR** | [003](experiments/003-hai-proxy-compatible/) |
+| gpt-4.1-mini | 85.6% | $0.02 | 39.7s | Fast fallback | [003](experiments/003-hai-proxy-compatible/) |
+| gpt-5 | 82.3% | $0.10 | 55.4s | Testing only | [003](experiments/003-hai-proxy-compatible/) |
+| gpt-4.1 | - | - | - | Vision not supported | [003](experiments/003-hai-proxy-compatible/) |
+
+**⚠️ NOT Available in HAI Proxy:**
+- `gpt-4o` - Does not exist (discovered in [Experiment 001](experiments/001-initial-model-comparison/))
+- `gpt-4-vision-preview` - Not supported (tested in [Experiment 002](experiments/002-full-model-suite/))
+
+#### Claude Models (via HAI Proxy)
+
+| Model | Accuracy | Cost/Image | Speed | Use Case | Experiment |
+|-------|----------|------------|-------|----------|------------|
+| anthropic--claude-4.6-sonnet | 90.3% | $0.12 | 52.6s | High accuracy | [003](experiments/003-hai-proxy-compatible/) |
+| anthropic--claude-4.6-opus | 90.2% | $0.62 | 30.5s | Not worth cost | [003](experiments/003-hai-proxy-compatible/) |
+| anthropic--claude-4.5-sonnet | - | - | - | Not tested | - |
+| anthropic--claude-4.5-haiku | - | - | - | Summarization | Production |
+
+### Model Comparison Summary
+
+From [EXPERIMENTS.md](EXPERIMENTS.md):
+
+```
+| Model             | Accuracy | Word F1 | Cost   | Latency | Italics | Score |
+|-------------------|----------|---------|--------|---------|---------|-------|
+| GPT-5 Mini ⭐     | 91.2%    | 0.588   | $0.021 | 51.6s   | 0.0%    | 75.7  |
+| GPT-4.1 Mini      | 85.6%    | 0.598   | $0.021 | 39.7s   | 0.5%    | 71.8  |
+| Claude Sonnet     | 90.3%    | 0.604   | $0.123 | 52.6s   | 0.0%    | 63.2  |
+| Claude Opus       | 90.2%    | 0.592   | $0.617 | 30.5s   | 0.0%    | 63.1  |
+| GPT-5             | 82.3%    | 0.590   | $0.103 | 55.4s   | 0.0%    | 57.6  |
+```
+
+**Composite Score:** `accuracy × 0.7 + cost × 0.15 + latency × 0.15`
+
+---
+
+## 🎯 Configuration Scenarios
+
+### Scenario 1: Maximum Accuracy (Cost No Object)
+
+```env
+AI_MODEL_OCR=gpt-5-mini                      # 91.2% accuracy
+AI_MODEL_OCR_FALLBACK=anthropic--claude-4.6-sonnet  # 90.3% fallback
+```
+- **Accuracy**: 91.2% primary, 90.3% fallback
+- **Cost**: $0.02 primary, $0.12 fallback
+- **Use Case**: When accuracy is critical
+
+### Scenario 2: Best Value (Current Production) ⭐
+
+```env
+AI_MODEL_OCR=gpt-5-mini                      # 91.2% accuracy
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini          # 85.6% fallback
+```
+- **Accuracy**: 91.2% primary, 85.6% fallback
+- **Cost**: $0.02 both (lowest possible)
+- **Use Case**: Production default
+
+### Scenario 3: Fastest Processing
+
+```env
+AI_MODEL_OCR=gpt-4.1-mini                    # 39.7s latency
+AI_MODEL_OCR_FALLBACK=gpt-5-mini            # Upgrade on failure
+```
+- **Speed**: 39.7s (fastest tested)
+- **Accuracy**: 85.6% (acceptable)
+- **Use Case**: High-volume batch processing
+
+### Scenario 4: Cross-Provider Redundancy
+
+```env
+AI_MODEL_OCR=gpt-5-mini                      # OpenAI primary
+AI_MODEL_OCR_FALLBACK=anthropic--claude-4.6-sonnet  # Claude fallback
+```
+- **Resilience**: Different providers handle different handwriting styles
+- **Cost**: $0.02 primary, $0.12 fallback
+- **Use Case**: Maximum reliability
+
+### Scenario 5: Claude-First (Higher Cost)
+
+```env
+AI_MODEL_OCR=anthropic--claude-4.6-sonnet    # 90.3% accuracy
+AI_MODEL_OCR_FALLBACK=gpt-5-mini            # Cheaper fallback
+```
+- **Accuracy**: 90.3% primary (0.9% lower than GPT-5 Mini)
+- **Cost**: $0.12 primary, $0.02 fallback (5x more expensive)
+- **Use Case**: Claude preference, willing to pay more
+
+---
+
+## ⚙️ Configuration Options
+
+### Core AI Settings
+
+```env
+# AI Provider Selection
+AI_PROVIDER=hai                              # Options: hai, anthropic, openai
+
+# Vision Models (OCR)
+AI_MODEL_OCR=gpt-5-mini                      # Primary OCR model
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini          # Automatic fallback on poor quality
+
+# Text Models (Summarization)
+AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
+AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
+```
+
+### HAI Proxy Settings
+
+```env
+# HAI Proxy Configuration
+HAI_AUTO_START=true                          # Auto-start proxy if not running
+HAI_PROXY_PORT=6655                          # Default HAI proxy port
+# HAI_API_KEY=xxx                            # Only needed for HAI Desktop App
+```
+
+### OCR Quality Thresholds
+
+Based on [experiments/003-hai-proxy-compatible/findings.md](experiments/003-hai-proxy-compatible/findings.md):
+
+```env
+# Quality Assessment (Enhanced Detection)
+OCR_UNCERTAIN_THRESHOLD=30                   # Trigger fallback at >30% uncertainty
+OCR_CONSECUTIVE_ILLEGIBLE_THRESHOLD=5       # Trigger on 5+ consecutive illegibles
+OCR_LEGACY_QUALITY_CHECK=false               # Use combined illegible + italic detection
+```
+
+**How it works:**
+- `uncertainPercent = illegiblePercent + italicPercent`
+- Fallback triggers when `uncertainPercent > 30%`
+- Italic markers (`*word*`) indicate model uncertainty
+- See [openspec/changes/improve-ocr-accuracy/specs/ocr-processing/spec.md](openspec/changes/improve-ocr-accuracy/specs/ocr-processing/spec.md)
+
+### Image Compression
+
+```env
+# Image Compression (for large images)
+IMAGE_COMPRESSION_ENABLED=true
+IMAGE_COMPRESSION_MAX_SIZE_MB=20            # GPT supports 20MB (Claude: 5MB)
+IMAGE_COMPRESSION_MIN_QUALITY=70            # Minimum JPEG quality
+```
+
+**Provider Limits:**
+- Claude models: 5MB max
+- GPT models: 20MB max
+- Recommendation: Set `MAX_SIZE_MB=20` with GPT-5 Mini
+
+### Handwriting Reference
+
+```env
+# Handwriting Reference (optional)
+HANDWRITING_REFERENCE_ENABLED=true
+HANDWRITING_REFERENCE_FILE=./handwriting-reference.json
+```
+
+See [docs/guides/glossary-curation.md](docs/guides/glossary-curation.md) for domain-specific term configuration.
+
+---
+
+## 🧪 Testing Configurations
+
+### Test Scripts
+
+Pre-configured test scripts in `tests/`:
+
+```bash
+# Test all models (comprehensive)
+./tests/test-all-models.sh
+
+# Test specific provider
+./tests/test-claude.sh          # 6 Claude models
+./tests/test-openai.sh          # 4 OpenAI models
+```
+
+Scripts automatically:
+1. Backup your current `.env`
+2. Test each model configuration
+3. Generate results in `test-results/`
+4. Restore your original `.env`
+
+### Experimentation Framework
+
+Use the structured experimentation workflow:
+
+```bash
+# Ideate new experiments
+/experiment-ocr
+
+# Run model comparison
+npm run experiment-ocr "test-images/sample.jpeg" -- --type=model
+
+# Test specific models
+npm run experiment-ocr "test-images/sample.jpeg" -- --models=gpt-5-mini,claude-sonnet
+
+# Run test suite
+npm run test-ocr-suite
+```
+
+See [experiments/README.md](experiments/README.md) for experiment structure and templates.
+
+---
+
+## 💰 Cost Analysis
+
+From [OCR_MODEL_SELECTION.md](OCR_MODEL_SELECTION.md):
+
+### Cost Per Image
+
+| Model | Cost | vs GPT-5 Mini |
+|-------|------|---------------|
+| **GPT-5 Mini** ⭐ | $0.02 | Baseline |
+| GPT-4.1 Mini | $0.02 | Same |
+| GPT-5 | $0.10 | +400% |
+| Claude Sonnet | $0.12 | +500% |
+| Claude Opus | $0.62 | +3000% |
+
+### Annual Savings (Production Config)
+
+```
+Volume: 10,000 images/year
+
+Before (Claude Sonnet):  $1,200/year
+After (GPT-5 Mini):      $200/year
+Annual Savings:          $1,000/year (83% reduction)
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Model Not Found
+
+```bash
+# List available models via HAI proxy
+curl -H "Authorization: Bearer $HAI_API_KEY" \
+  http://localhost:6655/openai/v1/models | jq '.data[].id'
+```
+
+**Common Issues:**
+- Using `gpt-4o` (doesn't exist) → Use `gpt-5` or `gpt-5-mini`
+- Using `gpt-4-vision-preview` (not supported) → Use `gpt-4.1-mini`
+- Wrong format: `anthropic-claude` → Use `anthropic--claude` (double dash)
+
+### HAI Proxy Not Starting
+
+```bash
+# Check if running
 lsof -i :6655
 
-# Manually start
+# Manually start (HAI CLI)
 hai proxy start
 
 # Check status
 hai proxy status
+
+# Desktop App: Start from app, then set HAI_AUTO_START=false
 ```
 
-**API key not working?**
-- Verify your key at https://platform.openai.com/api-keys
-- Check you have credits: https://platform.openai.com/usage
-- Make sure the key is set in `.env`: `OPENAI_API_KEY=sk-...`
+### Low Accuracy
 
-**Model not found?**
+From [experiments/003-hai-proxy-compatible/findings.md](experiments/003-hai-proxy-compatible/findings.md):
+
+1. ✓ Using `gpt-5-mini` (best accuracy: 91.2%)?
+2. ✓ Image quality good (clear, high contrast)?
+3. ✓ Handwriting reference configured?
+4. ✓ Check uncertainty markers (should be 0-2%)
+
 ```bash
-# List available models via HAI proxy
-hai models
-
-# Verify model name format (use '--' not '-')
-# Correct: anthropic--claude-4.6-sonnet
-# Wrong: anthropic-claude-4.6-sonnet
+# Run test to see actual accuracy
+npm run test-ocr "test-images/your-image.jpeg" -- --show-diff
 ```
 
-**Image too large errors?**
-- Image compression is enabled by default for images >5MB
-- Check compression logs in output: `✓ Image compressed: X.XMB → Y.YMB`
-- If image still can't compress, manually resize to ~2000px width
-- Adjust compression settings in `.env`:
-  ```env
-  IMAGE_COMPRESSION_MAX_SIZE_MB=5        # Claude's 5MB limit
-  IMAGE_COMPRESSION_MIN_QUALITY=70       # Min quality (lower = more compression)
-  IMAGE_COMPRESSION_ENABLED=true         # Enable/disable compression
-  ```
+### Configuration Changes Not Applied
 
-## Image Compression Configuration
+**Root Cause:** CLI tools need explicit dotenv loading
 
-All preset configurations include automatic image compression to handle large images (>5MB) that exceed Claude 4.6 Sonnet's limit.
-
-**How it works:**
-1. Images are preprocessed (grayscale, resize, normalize, sharpen)
-2. If preprocessed buffer >5MB, progressive compression is applied:
-   - Try quality=90 (high quality, minimal compression)
-   - If still >5MB, try quality=80
-   - If still >5MB, try quality=70 (minimum for text readability)
-   - If still >5MB, fail with manual resize guidance
-
-**Default settings:**
-- `IMAGE_COMPRESSION_MAX_SIZE_MB=5` - Claude 4.6 Sonnet's limit
-- `IMAGE_COMPRESSION_MIN_QUALITY=70` - Tested for text readability
-- `IMAGE_COMPRESSION_ENABLED=true` - Auto-compression enabled
-
-**Tuning:**
-- Increase `MAX_SIZE_MB` for providers with higher limits (e.g., OpenAI: 20MB)
-- Decrease `MIN_QUALITY` (60-69) for more aggressive compression (risk: illegible text)
-- Increase `MIN_QUALITY` (75-85) for better quality (risk: may not meet size limit)
-- Set `ENABLED=false` to disable compression (images >5MB will fail)
-
-**Example output:**
-```
-✓ Image compressed: 6.20MB → 4.80MB (quality=80, ratio=1.29x)
+**Solution:** Restart the process after `.env` changes:
+```bash
+# Kill and restart
+pkill -f "tsx src/main.ts"
+npm start
 ```
 
-## See Also
+See [experiments/003-hai-proxy-compatible/findings.md](experiments/003-hai-proxy-compatible/findings.md) - Discovery #4
 
-- [README.md](README.md) - Main project documentation
-- [tests/MODELS.md](tests/MODELS.md) - Complete model reference
-- [.env.example](.env.example) - Detailed configuration guide
+### Image Too Large
+
+```env
+# For GPT models (support 20MB)
+IMAGE_COMPRESSION_MAX_SIZE_MB=20
+
+# For Claude models (5MB limit)
+IMAGE_COMPRESSION_MAX_SIZE_MB=5
+
+# More aggressive compression
+IMAGE_COMPRESSION_MIN_QUALITY=60    # Risk: may affect text readability
+```
+
+---
+
+## 📚 Related Documentation
+
+- **[EXPERIMENTS.md](EXPERIMENTS.md)** - Experiment history and key findings
+- **[OCR_MODEL_SELECTION.md](OCR_MODEL_SELECTION.md)** - Detailed test results and recommendations
+- **[experiments/README.md](experiments/README.md)** - Experiment structure and templates
+- **[README.md](README.md)** - Main project documentation
+- **[docs/guides/glossary-curation.md](docs/guides/glossary-curation.md)** - Domain-specific term configuration
+
+---
+
+## 🔄 Configuration History
+
+| Date | Change | Reason | Experiment |
+|------|--------|--------|------------|
+| 2026-04-16 | Switch to GPT-5 Mini | 91.2% accuracy, 83% cost reduction | [003](experiments/003-hai-proxy-compatible/) |
+| 2026-04-15 | Add GPT-4.1 Mini fallback | Cross-provider redundancy | [003](experiments/003-hai-proxy-compatible/) |
+| 2026-04-15 | Remove gpt-4o from configs | Model doesn't exist in HAI proxy | [001](experiments/001-initial-model-comparison/) |
+| 2026-04-10 | Claude 4.6 Sonnet primary | Initial stable configuration | - |
+
+---
+
+**Last Updated:** 2026-04-16  
+**Current Production:** GPT-5 Mini (gpt-5-mini) with GPT-4.1 Mini fallback
