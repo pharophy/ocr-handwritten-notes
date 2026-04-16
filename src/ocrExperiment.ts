@@ -87,16 +87,28 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     costPerMToken: 15.00,
   },
   {
-    name: 'GPT-4o',
+    name: 'GPT-5',
     provider: 'openai',
-    modelId: 'gpt-4o',
+    modelId: 'gpt-5',
     costPerMToken: 2.50,
   },
   {
-    name: 'GPT-4 Vision',
+    name: 'GPT-5 Mini',
     provider: 'openai',
-    modelId: 'gpt-4-vision-preview',
-    costPerMToken: 10.00,
+    modelId: 'gpt-5-mini',
+    costPerMToken: 0.50,
+  },
+  {
+    name: 'GPT-4.1',
+    provider: 'openai',
+    modelId: 'gpt-4.1',
+    costPerMToken: 2.50,
+  },
+  {
+    name: 'GPT-4.1 Mini',
+    provider: 'openai',
+    modelId: 'gpt-4.1-mini',
+    costPerMToken: 0.50,
   },
 ];
 

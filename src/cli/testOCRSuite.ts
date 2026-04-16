@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs/promises';
+
+// Load environment variables
+dotenv.config();
 import {
   runBatchTests,
   formatBatchResults,

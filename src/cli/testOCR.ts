@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
+import dotenv from 'dotenv';
 import path from 'path';
+
+// Load environment variables
+dotenv.config();
 import {
   discoverTestCases,
   runOCRTest,
