@@ -34,7 +34,17 @@ vi.mock('../src/handwritingReference', () => ({
   formatReferenceImageInstructions: vi.fn().mockReturnValue(''),
   referenceImageExists: vi.fn().mockResolvedValue(false),
   getDomainGlossary: vi.fn().mockReturnValue({}),
-  formatGlossaryContext: vi.fn().mockReturnValue('')
+  formatGlossaryContext: vi.fn().mockReturnValue(''),
+  loadAIProviderConfig: vi.fn().mockResolvedValue({
+    type: 'openai',
+    apiKey: 'test-key',
+    baseURL: undefined,
+    models: {
+      ocr: 'gpt-4o',
+      summarization: 'gpt-4o-mini',
+      validation: 'gpt-4o-mini'
+    }
+  })
 }));
 
 describe('OCR Processing Specifications', () => {

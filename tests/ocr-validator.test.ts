@@ -26,7 +26,17 @@ vi.mock('../src/utils', () => ({
 
 // Mock handwriting reference
 vi.mock('../src/handwritingReference', () => ({
-  loadHandwritingReference: vi.fn().mockResolvedValue({})
+  loadHandwritingReference: vi.fn().mockResolvedValue({}),
+  loadAIProviderConfig: vi.fn().mockResolvedValue({
+    type: 'openai',
+    apiKey: 'test-key',
+    baseURL: undefined,
+    models: {
+      ocr: 'gpt-4o',
+      summarization: 'gpt-4o-mini',
+      validation: 'gpt-4o-mini'
+    }
+  })
 }));
 
 describe('OCR Validation Specifications', () => {

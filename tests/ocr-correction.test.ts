@@ -45,6 +45,16 @@ vi.mock('../src/handwritingReference', () => ({
       maxCorrectionsPerImage: 10,
       minIssueConfidence: 0.8
     }
+  }),
+  loadAIProviderConfig: vi.fn().mockResolvedValue({
+    type: 'openai',
+    apiKey: 'test-key',
+    baseURL: undefined,
+    models: {
+      ocr: 'gpt-4o',
+      summarization: 'gpt-4o-mini',
+      validation: 'gpt-4o-mini'
+    }
   })
 }));
 
