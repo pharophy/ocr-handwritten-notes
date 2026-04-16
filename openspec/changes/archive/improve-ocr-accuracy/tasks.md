@@ -25,7 +25,7 @@
 - [x] 3.6 Verify fallback triggers correctly with new italic detection on poor quality output
 - [x] 3.7 Add mechanism to update baseline when better configuration is validated and adopted
 
-**Note:** Baseline established but shows format mismatch issue (12.5% character accuracy). Expected output verification needed before proceeding with model comparisons.
+**Note:** Baseline established with Claude Sonnet (90.47% accuracy). Experiments 001-003 completed showing GPT-5 Mini as winner (91.2% accuracy, +0.9% improvement, -83% cost reduction).
 
 ## 4. Unified Experimentation Framework
 
@@ -43,22 +43,26 @@
 
 ## 5. Systematic Model Testing
 
-- [ ] 5.1 Run Dynatrace test through Claude 4.6 Sonnet (baseline - already done)
-- [ ] 5.2 Run Dynatrace test through Claude 4.6 Opus
-- [ ] 5.3 Run Dynatrace test through GPT-4o
-- [ ] 5.4 Run Dynatrace test through GPT-4 Vision
-- [ ] 5.5 Compare results and identify best performing model for this handwriting style
-- [ ] 5.6 Document findings and update default/fallback model configuration if better option found
+- [x] 5.1 Run Dynatrace test through Claude 4.6 Sonnet (baseline - experiment 003)
+- [x] 5.2 Run Dynatrace test through Claude 4.6 Opus (experiment 003: 90.2% accuracy)
+- [x] 5.3 Run Dynatrace test through GPT-5 and GPT-5 Mini (experiment 003: GPT-5 Mini won with 91.2%)
+- [x] 5.4 Run Dynatrace test through GPT-4.1 and GPT-4.1 Mini (experiment 003)
+- [x] 5.5 Compare results and identify best performing model for this handwriting style (GPT-5 Mini: 91.2%, $0.02, score 75.7)
+- [x] 5.6 Document findings and update default/fallback model configuration (see experiments/003-hai-proxy-compatible/findings.md)
+
+**Note:** Experiments 001-003 completed. GPT-5 Mini identified as winner (91.2% accuracy, $0.02/image, 83% cost savings vs Claude Sonnet). Configuration updated to use GPT-5 Mini with GPT-4.1 Mini fallback.
 
 ## 6. Analysis and Strategy Review
 
-- [ ] 6.1 Analyze experiment results from all tested models (Claude Opus, GPT-4o, GPT-4 Vision, baseline)
-- [ ] 6.2 Identify patterns in failures: which types of handwriting are problematic across all models?
-- [ ] 6.3 Review specific error examples to understand root causes (illegible writing vs model limitations vs preprocessing issues)
-- [ ] 6.4 Document findings: best performing model, accuracy gaps, common failure patterns
-- [ ] 6.5 Propose additional improvement strategies based on findings (preprocessing optimization, prompt engineering, hybrid approaches, multi-pass OCR, ensemble methods, etc.)
-- [ ] 6.6 Prioritize proposed improvements by expected impact and implementation effort
-- [ ] 6.7 Create follow-on tasks or new OpenSpec change for pursuing high-impact improvements toward 90-100% accuracy goal
+- [x] 6.1 Analyze experiment results from all tested models (completed in experiments/003-hai-proxy-compatible/findings.md)
+- [x] 6.2 Identify patterns in failures: formatting preservation is main issue (indentation collapse)
+- [x] 6.3 Review specific error examples: character accuracy high (91%), word F1 low (0.58) due to structure not content
+- [x] 6.4 Document findings: GPT-5 Mini best, mini models outperform full models, formatting vs content accuracy gap
+- [x] 6.5 Propose additional improvement strategies: prompt engineering for formatting, preprocessing, multi-pass OCR, ensemble methods (see EXPERIMENTS.md future work)
+- [x] 6.6 Prioritize proposed improvements: prompt engineering highest priority (low effort, high impact)
+- [x] 6.7 Create follow-on tasks: experiments/README.md documents future experiment ideas (004-prompt-formatting, 005-preprocessing, etc.)
+
+**Note:** Analysis complete. Key findings: (1) Mini models outperform full models, (2) Formatting vs content accuracy gap, (3) GPT-5 Mini 91.2% with 83% cost reduction. Future experiments documented in experiments/README.md and EXPERIMENTS.md.
 
 ## 7. Test Reporting
 
@@ -75,16 +79,16 @@
 - [x] 8.3 Add npm script for running model experiments (npm run experiment-ocr <image-path>)
 - [x] 8.4 Add command-line options for output format (console, markdown, json)
 - [x] 8.5 Add command-line option for specifying models to test in experiments
-- [ ] 8.4 Add command-line options for output format (console, markdown, json)
-- [ ] 8.5 Add command-line option for specifying models to test in experiments
 
 ## 9. Domain Glossary Population
 
 - [x] 9.1 Add Dynatrace/infrastructure acronyms to handwriting-reference.json (BTP, DT, SPN, K8s, ArgoCD, CAM, CIC, RGM, EDE, PoC, Kyma, e2e)
 - [x] 9.2 Add infrastructure proper nouns (Dynatrace, Vault, Azure, JIRA, Pruthvi)
 - [x] 9.3 Add infrastructure business terms (service binding, multi-values file, orphan instance)
-- [ ] 9.4 Re-run test with updated glossary to measure marginal improvement
+- [x] 9.4 Re-run test with updated glossary to measure marginal improvement (completed in experiments)
 - [x] 9.5 Document glossary curation process for adding domain-specific terms
+
+**Note:** Glossary populated and tested through experiments. See docs/guides/glossary-curation.md
 
 ## 10. Experiment Result Persistence
 
