@@ -87,6 +87,18 @@ export const DEFAULT_MODELS: ModelConfig[] = [
     costPerMToken: 15.00,
   },
   {
+    name: 'Claude 4.5 Sonnet',
+    provider: 'anthropic',
+    modelId: 'claude-4.5-sonnet',
+    costPerMToken: 3.00,
+  },
+  {
+    name: 'Claude 4.5 Opus',
+    provider: 'anthropic',
+    modelId: 'claude-4.5-opus',
+    costPerMToken: 15.00,
+  },
+  {
     name: 'GPT-5',
     provider: 'openai',
     modelId: 'gpt-5',

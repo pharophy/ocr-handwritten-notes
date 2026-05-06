@@ -14,7 +14,7 @@ The system SHALL preprocess handwritten images to enhance text clarity and reada
 - **THEN** the image SHALL be automatically compressed using progressive quality reduction to meet the 5MB limit before being sent to the AI provider
 
 ### Requirement: Handwriting transcription accuracy
-The system SHALL transcribe handwritten text with character-level fidelity, preserving all content without summarization or omission.
+The system SHALL transcribe handwritten text with character-level fidelity, preserving all content without summarization or omission. The system SHALL support latest OpenAI models (GPT-5, GPT-4.1) and Claude models as options for handwriting recognition.
 
 #### Scenario: Complete transcription
 - **WHEN** a handwritten image is processed
@@ -27,6 +27,10 @@ The system SHALL transcribe handwritten text with character-level fidelity, pres
 #### Scenario: No content skipping
 - **WHEN** processing any handwritten content
 - **THEN** the system SHALL NOT skip, abbreviate, or summarize any portion of the handwritten text
+
+#### Scenario: Latest model usage
+- **WHEN** GPT-5, GPT-4.1, or other latest models are configured as the OCR model
+- **THEN** the system SHALL use the specified model's vision capabilities for handwriting transcription with the same accuracy requirements
 
 ### Requirement: Layout detection and preservation
 The system SHALL automatically detect the layout type of handwritten notes and preserve the original structure in the output.

@@ -62,7 +62,8 @@ HAI_AUTO_START=true                # Auto-start proxy if not running
 HAI_PROXY_PORT=6655               # Default port
 
 # Optional: Customize models (HAI auto-routes based on model name)
-AI_MODEL_OCR=anthropic--claude-4.6-sonnet
+AI_MODEL_OCR=gpt-4.1                      # ⭐ Recommended (best value)
+# AI_MODEL_OCR=anthropic--claude-4.6-sonnet  # Alternative: highest accuracy
 AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
 AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 
@@ -79,7 +80,8 @@ HAI_AUTO_START=false               # Desktop app manages proxy lifecycle
 HAI_PROXY_PORT=6655               # Default port
 
 # Optional: Customize models
-AI_MODEL_OCR=anthropic--claude-4.6-sonnet
+AI_MODEL_OCR=gpt-4.1                # ⭐ Recommended (best value)
+# AI_MODEL_OCR=anthropic--claude-4.6-sonnet  # Alternative: highest accuracy
 AI_MODEL_SUMMARIZATION=anthropic--claude-4.5-haiku
 AI_MODEL_VALIDATION=anthropic--claude-4.5-haiku
 
@@ -97,7 +99,11 @@ OPENAI_API_KEY=your_openai_api_key_here
 AI_PROVIDER=openai  # Optional, will auto-detect from API key
 
 # Optional: Customize models
-AI_MODEL_OCR=gpt-4o
+AI_MODEL_OCR=gpt-4.1        # ⭐ Recommended (90.8% accuracy, best value)
+# Other options:
+# AI_MODEL_OCR=gpt-4o       # If available via OpenAI direct
+AI_MODEL_SUMMARIZATION=gpt-4.1-mini
+AI_MODEL_VALIDATION=gpt-4.1-mini
 AI_MODEL_SUMMARIZATION=gpt-4o-mini
 AI_MODEL_VALIDATION=gpt-4o-mini
 
@@ -495,21 +501,27 @@ All AI provider configuration is managed through environment variables in the `.
 
 #### Model Selection (Optional)
 
+> **📊 Based on OCR Experiments (2026-05-06)**  
+> Tested GPT-5, GPT-4.1, Claude 4.6 Sonnet, and Claude 4.5 Sonnet on handwriting samples.  
+> **Recommendation**: Use `gpt-4.1` for best value (90.8% accuracy, fast, low cost) or `claude-4.6-sonnet` for highest accuracy (92.2%, 17% more expensive).  
+> **Avoid**: `gpt-5` is 2.5x slower than `gpt-4.1` with no accuracy benefit.  
+> See [experiment results](experiment-results/model-analysis.md) for details.
+
 **`AI_MODEL_OCR`** - Model for handwriting OCR (requires vision)
 - **OpenAI options (via HAI proxy or direct):**
-  - `gpt-5` - Latest GPT-5 with vision, best accuracy
-  - `gpt-5-mini` - GPT-5 Mini, faster and cost-effective
-  - `gpt-4.1` - GPT-4.1 with vision
-  - `gpt-4.1-mini` - GPT-4.1 Mini
+  - `gpt-4.1` - **⭐ Recommended** - Best balance (90.8% accuracy, fast, cheap)
+  - `gpt-5-mini` - Efficient model, good for batch processing
+  - `gpt-4.1-mini` - Faster, lower cost alternative
+  - ⚠️ `gpt-5` - Latest but 2.5x slower than gpt-4.1 with same accuracy (not recommended)
   - Full list: https://platform.openai.com/docs/models
-- **Claude options (via HAI proxy, recommended):**
-  - `anthropic--claude-4.6-sonnet` - Latest Claude 4.6 Sonnet (recommended)
-  - `anthropic--claude-4.6-opus` - Claude 4.6 Opus, highest accuracy
-  - `anthropic--claude-4.5-sonnet` - Claude 4.5 Sonnet, excellent for handwriting
-  - `anthropic--claude-4.5-opus` - Claude 4.5 Opus
-  - `anthropic--claude-4.5-haiku` - Claude 4.5 Haiku, faster and lower cost
-  - `anthropic--claude-4-sonnet` - Claude 4 Sonnet
-- List all models: Run `hai version` to check CLI version and test models
+- **Claude options (via HAI proxy):**
+  - `anthropic--claude-4.6-sonnet` - **⭐ Highest accuracy** (92.2%, but 17% more expensive)
+  - `anthropic--claude-4.5-sonnet` - Previous gen, 91.8% accuracy
+  - `anthropic--claude-4.6-opus` - Premium flagship, highest quality
+  - `anthropic--claude-4.5-opus` - Previous gen opus
+  - `anthropic--claude-4.5-haiku` - Fastest, lower cost
+  - `anthropic--claude-4-sonnet` - Older generation
+- List all models: Run `/list-available-models` skill or check HAI proxy
 
 **`AI_MODEL_SUMMARIZATION`** - Model for generating summaries
 - **OpenAI options:**
