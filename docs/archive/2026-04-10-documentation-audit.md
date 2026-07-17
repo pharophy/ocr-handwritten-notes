@@ -67,9 +67,9 @@ The remainder of this document contains the original audit analysis that led to 
 | **CONFIG.md** | 6.2KB | ✅ Keep | Model configuration guide | Keep as-is | ✅ Kept in root |
 | **TESTING.md** | 4.6KB | ✅ Keep | How to run tests | Move to tests/ | ✅ Moved to docs/guides/ |
 | **ACCURACY_ANALYSIS.md** | 5.8KB | ⚠️ Archive | OCR accuracy analysis from Phase 1-2 | Archive (historical) | ✅ Archived to docs/archive/ |
-| **FINAL-TEST-RESULTS.md** | 5.3KB | ⚠️ Archive | HAI proxy model test results (April 2) | Archive (historical) | ✅ Archived to docs/archive/ |
-| **TESTING-RESULTS.md** | 7.7KB | ⚠️ Archive | HAI proxy testing results (April 2) | Archive (historical) | ✅ Archived to docs/archive/ |
-| **SOLUTION-SUMMARY.md** | 5.9KB | ⚠️ Archive | HAI proxy integration summary (April 2) | Archive (historical) | ✅ Archived to docs/archive/ |
+| **FINAL-TEST-RESULTS.md** | 5.3KB | Removed | Obsolete provider test results | Removed during direct-provider cleanup |
+| **TESTING-RESULTS.md** | 7.7KB | Removed | Obsolete provider testing results | Removed during direct-provider cleanup |
+| **SOLUTION-SUMMARY.md** | 5.9KB | Removed | Obsolete provider integration summary | Removed during direct-provider cleanup |
 | **PR-COMPLETION-CHECK.md** | 7.1KB | ❌ Remove | PR checklist from April 2 (merged) | Delete (obsolete) | ✅ Deleted |
 | **shortcut.md** | 445B | ❌ Remove | Personal Automator setup instructions | Delete (user-specific) | ✅ Deleted |
 

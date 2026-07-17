@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Extracted all magic numbers to named constants for maintainability
 - Applied image preprocessing and compression to validation/correction pipeline
-- Updated README with HAI Desktop App setup instructions
+- Updated README with direct provider setup instructions
 - Improved error messages for compression failures
 
 ### Fixed
@@ -47,14 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - AI provider abstraction layer
-- HAI proxy integration with automatic startup
-- Support for multiple AI models (Claude and OpenAI)
+- Direct provider integration
+- Support for multiple AI models across Anthropic and OpenAI
 - Model configuration via handwriting-reference.yaml
 - Direct OpenAI provider support
 
 ### Changed
 - Unified provider interface for all AI completions
-- Simplified provider type system (HAI vs OpenAI)
+- Simplified provider type system
 
 ## [1.0.0] - 2026-03-15
 

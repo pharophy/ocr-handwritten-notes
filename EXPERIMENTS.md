@@ -1,8 +1,8 @@
 # OCR Experiments - Summary
 
-**Last Updated**: 2026-04-16
+**Last Updated**: 2026-07-17
 
-This document provides an overview of all OCR accuracy experiments. For detailed information about each experiment, see the individual experiment folders in `experiments/`.
+This document summarizes OCR accuracy experiments. Current runtime configuration uses direct OpenAI or direct Anthropic providers only.
 
 ## Quick Links
 
@@ -14,117 +14,75 @@ This document provides an overview of all OCR accuracy experiments. For detailed
 ## Experiment Overview
 
 | # | Name | Status | Key Finding |
-|---|------|--------|-------------|
-| 001 | [initial-model-comparison](experiments/001-initial-model-comparison/) | ✅ Complete |  |
-| 002 | [full-model-suite](experiments/002-full-model-suite/) | ✅ Complete |  |
-| 003 | [hai-proxy-compatible](experiments/003-hai-proxy-compatible/) | ✅ Complete |  |
+| --- | --- | --- | --- |
+| 001 | [initial-model-comparison](experiments/001-initial-model-comparison/) | Complete | Initial model assumptions needed verification |
+| 002 | [full-model-suite](experiments/002-full-model-suite/) | Complete | Accuracy varies by model and prompt format |
+| 003 | [provider-compatibility](experiments/003-provider-compatibility/) | Complete | Model availability must be verified before configuration |
 
-## Experiments by Status
+## Key Discoveries
 
-### Completed (3)
+### 1. Mini Models Can Outperform Larger Models
 
-- **[001](experiments/001-initial-model-comparison/)**: initial model comparison
-- **[002](experiments/002-full-model-suite/)**: full model suite
-- **[003](experiments/003-hai-proxy-compatible/)**: hai proxy compatible
+- GPT-5 Mini: 91.2% accuracy at lower cost in the completed test set.
+- GPT-5: Lower accuracy and higher cost in that same test set.
+- Takeaway: do not assume larger models are better for handwriting OCR.
 
-### In Progress (0)
+### 2. Model Availability Must Be Verified
 
-None currently running.
+- Provider model catalogs and account entitlements can change.
+- A model name may be documented but unavailable to a given API key or endpoint.
+- Takeaway: verify model availability with the configured direct provider before relying on a model in `.env`.
 
-## Key Discoveries Across All Experiments
+### 3. Formatting and Content Accuracy Differ
 
-### 1. Mini Models Outperform Full Models (Experiment 003)
-- GPT-5 Mini: 91.2% accuracy at $0.02/image
-- GPT-5: 82.3% accuracy at $0.10/image
-- **Takeaway**: Don't assume larger models are better for specific tasks
+- Character accuracy can be high while word-level F1 looks lower.
+- Root cause in prior tests was often indentation and formatting collapse, not content loss.
+- Takeaway: use character accuracy and manual diff review together for OCR quality.
 
-### 2. HAI Proxy Model Limitations (Experiments 001-003)
-- HAI proxy only supports: gpt-5, gpt-5-mini, gpt-4.1, gpt-4.1-mini
-- Models NOT available: gpt-4o, gpt-4-vision-preview
-- **Takeaway**: Always verify API model availability before configuring
+### 4. Configuration Loading Matters
 
-### 3. Formatting vs Content Accuracy Gap (All Experiments)
-- Character accuracy: 85-91% (good)
-- Word F1 scores: 0.55-0.60 (appears poor)
-- Root cause: Indentation collapse, not content errors
-- **Takeaway**: Use character accuracy as primary OCR quality metric
+- CLI entry points need explicit `.env` loading.
+- Environment inheritance is not enough when values live in dotenv files.
+- Takeaway: each executable entry point should call `dotenv.config()`.
 
-### 4. Configuration Loading Critical (Experiment 003)
-- CLI tools need explicit `dotenv.config()`
-- Environment inheritance doesn't work for dotenv files
-- **Takeaway**: Every entry point needs environment loading
+### 5. Quality Assessment Benefits From Uncertainty Markers
 
-### 5. Quality Assessment Enhancement
-- Combined illegible + italic markers more accurate than illegible alone
-- Threshold increased from 15% → 30% for combined metric
-- **Takeaway**: Italic markers indicate model uncertainty, treat like illegible
-
-### 6. Cost-Accuracy-Speed Tradeoffs
-```
-Model           Accuracy  Cost      Latency  Score
-GPT-5 Mini      91.2%     $0.02     51.6s    75.7 ⭐
-GPT-4.1 Mini    85.6%     $0.02     39.7s    71.8
-Claude Sonnet   90.3%     $0.12     52.6s    63.2
-Claude Opus     90.2%     $0.62     30.5s    63.1
-GPT-5           82.3%     $0.10     55.4s    57.6
-```
-
-## Performance Improvements
-
-From start of experiments to current production configuration:
-
-| Metric | Before | After | Delta |
-|--------|--------|-------|-------|
-| Accuracy | 90.3% | 91.2% | +0.9% |
-| Cost | $0.12 | $0.02 | -83% |
-| Latency | 52.6s | 51.6s | -1.9% |
-| Score | 63.2 | 75.7 | +19.8% |
-| Annual Savings (10K images) | Baseline | - | $12,000 |
+- Combined illegible and uncertain markers produced better quality signals than illegible markers alone.
+- Takeaway: treat model uncertainty markers as quality signals.
 
 ## Current Production Configuration
 
 ```env
-AI_MODEL_OCR=gpt-5-mini                          # Winner from Experiment 003
-AI_MODEL_OCR_FALLBACK=gpt-4.1-mini              # Cost-effective fallback
-IMAGE_COMPRESSION_MAX_SIZE_MB=20                 # GPT supports larger images
-OCR_UNCERTAIN_THRESHOLD=30                       # Combined illegible + italic
-OCR_LEGACY_QUALITY_CHECK=false                   # Use enhanced quality assessment
+AI_PROVIDER=openai
+AI_MODEL_OCR=gpt-5-mini
+AI_MODEL_OCR_FALLBACK=gpt-4.1-mini
+IMAGE_COMPRESSION_MAX_SIZE_MB=20
+OCR_UNCERTAIN_THRESHOLD=30
+OCR_LEGACY_QUALITY_CHECK=false
 ```
 
 ## Future Experiment Ideas
 
-Based on findings from completed experiments:
-
-1. **Prompt Engineering for Formatting** - Address indentation collapse
-2. **Preprocessing Optimization** - Test sharpening/contrast variations
-3. **Multi-Pass OCR** - Use GPT-5 Mini + fallback for challenging sections
-4. **Mini Model Analysis** - Investigate why mini models outperform full models
-5. **Ensemble Methods** - Combine multiple model outputs
-6. **Domain Glossary Impact** - Test with/without domain-specific terms
-7. **Temperature Variations** - Test different sampling parameters
-8. **Handwriting Style Diversity** - Test across different writing styles
+1. Prompt engineering for formatting preservation
+2. Preprocessing optimization
+3. Multi-pass OCR for challenging sections
+4. Mini model analysis
+5. Ensemble methods
+6. Domain glossary impact
+7. Temperature and sampling behavior where supported
+8. Handwriting style diversity
 
 ## How to Run an Experiment
 
 ```bash
-# Ideate new experiments
-/experiment-ocr
-
-# Run model comparison
 npm run experiment-ocr "test-images/sample.jpeg" -- --type=model
-
-# Run single test
 npm run test-ocr "test-images/sample.jpeg"
-
-# Run full test suite
 npm run test-ocr-suite
 ```
 
 ## References
 
-- **Original Monolithic Summary**: See git history for comprehensive `EXPERIMENT_SUMMARY.md` (deprecated)
-- **Individual Experiments**: `experiments/XXX-name/` directories
-- **Testing Framework**: `src/ocrTester.ts`
-- **Experiment Framework**: `src/ocrExperiment.ts`
-- **Model Selection**: `OCR_MODEL_SELECTION.md`
-- **OpenSpec Change**: `openspec/changes/improve-ocr-accuracy/`
+- Individual experiments: `experiments/XXX-name/`
+- Testing framework: `src/ocrTester.ts`
+- Experiment framework: `src/ocrExperiment.ts`
+- Model selection: `OCR_MODEL_SELECTION.md`
