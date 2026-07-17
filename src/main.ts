@@ -4,13 +4,12 @@ import { processHandwrittenImage, CONFIDENCE_TO_PERCENT, PERCENT_WHOLE_NUMBER } 
 import { summarizeText } from './summarize';
 import { getAllImageFiles, fileExists } from './utils';
 import { validateOCROutput, formatValidationReport, getValidationConfig, correctOCRIssues, getCorrectionConfig, type ValidationReport } from './ocrValidator';
+import { getMonitoredFolders } from './config';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const MONITORED_FOLDERS = [path.resolve('C:/Users/shawn/Web Development/Notes/ZZ_Raw')];
-
 async function run() {
-  for (const folderPath of MONITORED_FOLDERS) {
+  for (const folderPath of getMonitoredFolders()) {
     const imageFiles = await getAllImageFiles(folderPath);
 
     for (const imagePath of imageFiles) {

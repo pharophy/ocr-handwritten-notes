@@ -60,6 +60,20 @@ Use direct Anthropic model IDs. Legacy prefixed Claude aliases are invalid.
 | `.env.direct.openai` | OpenAI | Direct OpenAI setup |
 | `.env.direct.anthropic` | Anthropic | Direct Anthropic setup |
 
+## Monitored Folders
+
+```env
+MONITORED_FOLDERS=/path/to/your/notes/folder
+```
+
+Use semicolons for multiple folders:
+
+```env
+MONITORED_FOLDERS=/path/to/notes;/path/to/other-notes
+```
+
+Batch OCR scans every configured folder. Aggregation commands use the first configured folder for their default output path.
+
 ## OCR Fallback
 
 ```env

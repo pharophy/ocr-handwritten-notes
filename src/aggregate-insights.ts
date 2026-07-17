@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import path from 'path';
+import dotenv from 'dotenv';
+import { getPrimaryMonitoredFolder } from './config';
+
+dotenv.config();
 
 interface ActionItem {
   text: string;
@@ -39,7 +43,7 @@ interface ReportMetadata {
   accomplishmentCount: number;
 }
 
-const MONITORED_FOLDER = path.resolve('/Users/I566809/Library/CloudStorage/OneDrive-SAPSE/Notes/ZZ_Raw');
+const MONITORED_FOLDER = getPrimaryMonitoredFolder();
 const COMPLETED_MARKERS = ['(Done)', '(done)', '[X]', '[x]'];
 const ACHIEVEMENT_KEYWORDS = ['achieved', 'completed', 'finished', 'launched', 'delivered', 'shipped', 'success', 'successful', 'won', 'closed'];
 const DECISION_KEYWORDS = ['finalized', 'resolved', 'approved', 'agreed', 'decided', 'confirmed'];
@@ -486,10 +490,10 @@ async function aggregateMeetingInsights() {
 Usage: npm run aggregate-insights [--output <path>]
 
 Aggregates comprehensive meeting insights including action items, accomplishments,
-learnings, decisions, and trends from all meeting notes in ZZ_Raw folder.
+learnings, decisions, and trends from all meeting notes in the configured monitored folder.
 
 Options:
-  --output <path>    Custom output file path (default: ZZ_Raw/meeting-insights-MM-DD.md)
+  --output <path>    Custom output file path (default: monitored folder/meeting-insights-MM-DD.md)
   --help, -h         Show this help message
 
 Examples:
@@ -519,7 +523,7 @@ Examples:
     console.log('');
 
     if (summaryFiles.length === 0) {
-      console.log('⚠️  No summary files found in ZZ_Raw folder');
+      console.log('⚠️  No summary files found in monitored folder');
       process.exit(0);
     }
 

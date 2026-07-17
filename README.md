@@ -36,6 +36,12 @@ Set the required API key in `.env`, then run:
 npm start
 ```
 
+Set the note source folder in `.env`:
+
+```env
+MONITORED_FOLDERS=/path/to/your/notes/folder
+```
+
 ## AI Provider Configuration
 
 Only direct OpenAI and direct Anthropic providers are supported.
@@ -108,12 +114,16 @@ Use a smaller max size, such as `5`, when your selected Anthropic model or endpo
 
 ## Configure Monitored Folders
 
-Edit [src/main.ts](src/main.ts) to set which folders contain handwritten note images:
+Set `MONITORED_FOLDERS` in `.env` to the folder that contains handwritten note images:
 
-```typescript
-const MONITORED_FOLDERS = [
-  path.resolve('/path/to/your/notes/folder'),
-];
+```env
+MONITORED_FOLDERS=/path/to/your/notes/folder
+```
+
+Use semicolons for multiple folders:
+
+```env
+MONITORED_FOLDERS=/path/to/notes;/path/to/other-notes
 ```
 
 ## Handwriting Reference
