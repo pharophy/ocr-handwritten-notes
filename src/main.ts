@@ -7,7 +7,7 @@ import { validateOCROutput, formatValidationReport, getValidationConfig, correct
 import dotenv from 'dotenv';
 dotenv.config();
 
-const MONITORED_FOLDERS = [path.resolve('/Users/I566809/Library/CloudStorage/OneDrive-SAPSE/Notes/ZZ_Raw')];
+const MONITORED_FOLDERS = [path.resolve('C:/Users/shawn/Web Development/Notes/ZZ_Raw')];
 
 async function run() {
   for (const folderPath of MONITORED_FOLDERS) {
