@@ -3,6 +3,8 @@
 .env.local
 .env.backup
 .env.openai
+.env.sap
+.claude/settings.local.json
 
 # OS files
 .DS_Store
