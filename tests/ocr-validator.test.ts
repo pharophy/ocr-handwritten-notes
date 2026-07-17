@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateOCROutput, formatValidationReport, getValidationConfig, type ValidationReport } from '../src/ocrValidator';
+import { validateOCROutput, formatValidationReport, getValidationConfig, resetOCRValidatorCacheForTests, type ValidationReport } from '../src/ocrValidator';
 
 // Mock OpenAI
 vi.mock('openai', () => {
@@ -42,6 +42,7 @@ vi.mock('../src/handwritingReference', () => ({
 describe('OCR Validation Specifications', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOCRValidatorCacheForTests();
   });
 
   describe('Requirement: Validation report structure', () => {
@@ -362,7 +363,7 @@ describe('OCR Validation Specifications', () => {
   });
 
   describe('Requirement: Model usage', () => {
-    it('Scenario: Validation request - should use gpt-4o-mini with temperature 0.3', async () => {
+    it('Scenario: Validation request - should use configured validation model without temperature', async () => {
       mockCreate.mockResolvedValue({
         choices: [{
           message: {
@@ -379,8 +380,8 @@ describe('OCR Validation Specifications', () => {
 
       const callArgs = mockCreate.mock.calls[0][0];
       expect(callArgs.model).toBe('gpt-4o-mini');
-      expect(callArgs.temperature).toBe(0.3);
-      expect(callArgs.response_format).toEqual({ type: 'json_object' });
+      expect(callArgs.temperature).toBeUndefined();
+      expect(callArgs.response_format).toBeUndefined();
     });
   });
 

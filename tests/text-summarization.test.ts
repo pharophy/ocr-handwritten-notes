@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { summarizeText } from '../src/summarize';
+import { resetSummarizeCacheForTests, summarizeText } from '../src/summarize';
 
 // Mock OpenAI
 vi.mock('openai', () => {
@@ -25,9 +25,22 @@ vi.mock('../src/utils', () => ({
   OPEN_AI_KEY: 'test-key'
 }));
 
+vi.mock('../src/handwritingReference', () => ({
+  loadHandwritingReference: vi.fn().mockResolvedValue({}),
+  loadAIProviderConfig: vi.fn().mockResolvedValue({
+    type: 'openai',
+    apiKey: 'test-key',
+    baseURL: undefined,
+    models: {
+      summarization: 'gpt-4o-mini'
+    }
+  })
+}));
+
 describe('Text Summarization Specifications', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSummarizeCacheForTests();
     mockCreate.mockResolvedValue({
       choices: [{
         message: {
@@ -73,7 +86,7 @@ Test decision.
       await summarizeText('test input');
 
       const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.messages[0].content).toContain('Action Items: bullet list starting with "AI: ..."');
+      expect(callArgs.messages[0].content).toContain('ONLY extract lines that explicitly start with "AI:"');
     });
 
     it('Scenario: Key learnings section - should extract insights and takeaways', async () => {
@@ -99,12 +112,12 @@ Test decision.
   });
 
   describe('Requirement: AI model usage for summarization', () => {
-    it('Scenario: Model selection - should use gpt-4o-mini with temperature 0.3', async () => {
+    it('Scenario: Model selection - should use configured model without temperature', async () => {
       await summarizeText('test input');
 
       const callArgs = mockCreate.mock.calls[0][0];
       expect(callArgs.model).toBe('gpt-4o-mini');
-      expect(callArgs.temperature).toBe(0.3);
+      expect(callArgs.temperature).toBeUndefined();
     });
   });
 

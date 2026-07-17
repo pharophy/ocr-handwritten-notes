@@ -100,6 +100,10 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 // Cache the AI provider
 let cachedProvider: AIProvider | null = null;
 
+export function resetOCRValidatorCacheForTests(): void {
+  cachedProvider = null;
+}
+
 async function getProvider(): Promise<AIProvider> {
   if (!cachedProvider) {
     const referenceConfig = await loadHandwritingReference();

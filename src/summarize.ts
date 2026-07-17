@@ -4,6 +4,10 @@ import { loadHandwritingReference, loadAIProviderConfig } from './handwritingRef
 // Cache the AI provider
 let cachedProvider: AIProvider | null = null;
 
+export function resetSummarizeCacheForTests(): void {
+  cachedProvider = null;
+}
+
 async function getProvider(): Promise<AIProvider> {
   if (!cachedProvider) {
     const referenceConfig = await loadHandwritingReference();
@@ -40,4 +44,3 @@ Meeting Transcript:
     return 'Error generating summary.';
   }
 }
-

@@ -63,6 +63,13 @@ let cachedReferenceImage: Buffer | null = null;
 let cachedProvider: AIProvider | null = null;
 let referenceLoaded = false;
 
+export function resetOCRCacheForTests(): void {
+  cachedReference = null;
+  cachedReferenceImage = null;
+  cachedProvider = null;
+  referenceLoaded = false;
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================

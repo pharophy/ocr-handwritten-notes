@@ -37,7 +37,7 @@ describe('OCR Quality Assessment', () => {
 
       expect(result.illegiblePercent).toBeCloseTo(44.4, 1);
       expect(result.isPoorQuality).toBe(true);
-      expect(result.reason).toContain('High illegible percentage');
+      expect(result.reason).toContain('High uncertainty');
     });
 
     it('should handle 100% illegible transcription', () => {
@@ -112,7 +112,7 @@ describe('OCR Quality Assessment', () => {
 
   describe('Configurable thresholds', () => {
     it('should use custom illegible threshold from env', () => {
-      process.env.OCR_ILLEGIBLE_THRESHOLD = '50';
+      process.env.OCR_UNCERTAIN_THRESHOLD = '50';
       // 2 illegible out of 5 total = 40%
       const transcription = 'word1 *[illegible]* word2 *[illegible]* word3';
 
