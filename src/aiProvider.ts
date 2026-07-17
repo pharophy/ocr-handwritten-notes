@@ -162,7 +162,6 @@ export class OpenAIProvider implements AIProvider {
 
     const response = await this.client.chat.completions.create({
       model,
-      temperature: 0.0,
       top_p: 1.0,
       messages: [
         {
@@ -201,7 +200,6 @@ export class OpenAIProvider implements AIProvider {
 
     const response = await this.client.chat.completions.create({
       model,
-      temperature: 0.3,
       messages: [
         {
           role: 'user',
@@ -450,7 +448,6 @@ export class HAIProvider implements AIProvider {
 
     const response = await client.chat.completions.create({
       model,
-      temperature: 0.0,
       top_p: 1.0,
       messages: [
         {
@@ -508,7 +505,6 @@ export class HAIProvider implements AIProvider {
 
     const response = await client.chat.completions.create({
       model,
-      temperature: 0.3,
       messages: [
         {
           role: 'user',
@@ -616,6 +612,4 @@ export function createAIProvider(config: AIProviderConfig): AIProvider {
       throw new Error(`Unsupported provider type: ${config.type}`);
   }
 }
-
-
 
