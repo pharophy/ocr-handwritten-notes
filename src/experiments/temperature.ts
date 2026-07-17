@@ -5,10 +5,11 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { createAIProvider, type AIProviderConfig, ProviderType } from '../providers/aiProvider';
+import sharp from 'sharp';
+import { createAIProvider } from '../aiProvider';
 import { runOCRTest, type TestCase } from '../ocrTester';
 import { loadAIProviderConfig, loadHandwritingReference } from '../handwritingReference';
-import { preprocessImage, condenseBulletLines } from '../ocrHelpers';
+import { condenseBulletLines } from '../ocr';
 
 interface TempResult {
   temperature: number;
@@ -54,8 +55,8 @@ async function runTemperatureExperiment(imagePath: string) {
       // Note: Need to add temperature support to provider interface
       const provider = createAIProvider({
         ...providerConfig,
-        temperature: temp as any, // Type override for experiment
-      });
+        temperature: temp,
+      } as any);
 
       // Preprocess image
       const preprocessed = await sharp(imageBuffer)

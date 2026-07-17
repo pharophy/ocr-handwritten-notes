@@ -9,8 +9,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { processHandwrittenImage } from '../ocr';
 import { runOCRTest, type TestCase, type TestResult } from '../ocrTester';
-import { PROMPT_VARIATIONS, getPromptVariation } from '../promptVariations';
-import { createAIProvider, type AIProviderConfig, ProviderType } from '../providers/aiProvider';
+import { PROMPT_VARIATIONS } from '../promptVariations';
 
 const program = new Command();
 
@@ -233,7 +232,7 @@ program
   .option('--temperature', 'Test different temperature settings')
   .option('--multi-pass <n>', 'Run multi-pass experiment with N passes', '2')
   .option('--all', 'Run all experiments')
-  .action(async (imagePath: string, options) => {
+  .action(async (imagePath: string, options: any) => {
     try {
       // Resolve expected output path
       const dir = path.dirname(imagePath);

@@ -1,6 +1,6 @@
 import path from 'path';
 import sharp from 'sharp';
-import { createAIProvider, AIProvider, ProviderType, AIProviderConfig } from './aiProvider';
+import { createAIProvider, AIProvider, AIProviderConfig } from './aiProvider';
 import {
   loadHandwritingReference,
   loadReferenceImage,
@@ -422,42 +422,12 @@ Output only the transcribed text, no explanation.
         // Get current provider config
         const currentConfig = cachedProvider!.getProviderConfig();
 
-        // With simplified provider types, fallback is easy:
-        // - If using HAI, it can handle any model (Claude or OpenAI)
-        // - If using OpenAI direct, check if fallback needs HAI
-        let fallbackProviderType: ProviderType;
-        let fallbackBaseURL: string | undefined;
-
-        if (currentConfig.type === ProviderType.HAI) {
-          // HAI can handle both Claude and OpenAI models dynamically
-          fallbackProviderType = ProviderType.HAI;
-          fallbackBaseURL = currentConfig.baseURL;
-        } else if (currentConfig.type === ProviderType.OPENAI) {
-          // Direct OpenAI - check if fallback is Claude (needs HAI)
-          if (fallbackModel.startsWith('anthropic--')) {
-            // Need to switch to HAI for Claude model
-            fallbackProviderType = ProviderType.HAI;
-            fallbackBaseURL = `http://localhost:${process.env.HAI_PROXY_PORT || '6655'}`;
-          } else {
-            // OpenAI fallback, can use direct
-            fallbackProviderType = ProviderType.OPENAI;
-            fallbackBaseURL = currentConfig.baseURL;
-          }
-        } else {
-          // Unknown provider type
-          console.log(`⚠️  Unknown provider type: ${currentConfig.type}, skipping fallback`);
-          console.log(`✓ Primary model succeeded: ${response.model}`);
-          const condensedPrimary = condenseBulletLines(primaryResult);
-          return { text: condensedPrimary, modelUsed: response.model };
-        }
-
         // Create fallback provider config by copying current config
         const fallbackConfig: AIProviderConfig = {
-          type: fallbackProviderType,
+          type: currentConfig.type,
           apiKey: currentConfig.apiKey,
-          baseURL: fallbackBaseURL,
+          baseURL: currentConfig.baseURL,
           models: { ocr: fallbackModel },
-          autoStartProxy: currentConfig.autoStartProxy,
         };
 
         // Create fallback provider and run OCR
