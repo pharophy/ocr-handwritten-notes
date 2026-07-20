@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { ProviderType, ModelMapping, AIProviderConfig } from './aiProvider';
+import { ProviderType, ModelMapping, AIProviderConfig, isAnthropic, isOpenAI } from './aiProvider';
 import { compressImageIfNeeded, getCompressionConfig, BYTES_PER_MB, SIZE_DECIMAL_PLACES } from './ocr';
 
 export interface DomainGlossary {
@@ -292,15 +292,15 @@ export async function loadAIProviderConfig(
       type,
       apiKey: getAPIKey(type),
       baseURL: getBaseURL(type),
-      models: getModelMapping(),
+      models: getModelMapping(type),
     };
 
     logProviderConfig(config);
     return config;
   }
 
-  const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
-  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+  const hasOpenAIKey = hasConfiguredCredential(process.env.OPENAI_API_KEY);
+  const hasAnthropicKey = hasConfiguredCredential(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
   if (hasOpenAIKey && hasAnthropicKey) {
     throw new Error(
@@ -323,7 +323,7 @@ export async function loadAIProviderConfig(
     type: inferredType,
     apiKey: getAPIKey(inferredType),
     baseURL: getBaseURL(inferredType),
-    models: getModelMapping(),
+    models: getModelMapping(inferredType),
   };
 
   logProviderConfig(config);
@@ -347,11 +347,14 @@ function parseProviderType(providerType: string): ProviderType {
 
 function getAPIKey(providerType: ProviderType): string | undefined {
   if (providerType === ProviderType.OPENAI) {
-    return process.env.OPENAI_API_KEY;
+    return getConfiguredCredential('OPENAI_API_KEY', process.env.OPENAI_API_KEY);
   }
 
   if (providerType === ProviderType.ANTHROPIC) {
-    return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN;
+    return getConfiguredCredential(
+      process.env.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : 'ANTHROPIC_AUTH_TOKEN',
+      process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
+    );
   }
 
   return undefined;
@@ -365,13 +368,19 @@ function getBaseURL(providerType: ProviderType): string | undefined {
   return undefined;
 }
 
-function getModelMapping(): ModelMapping {
+function getModelMapping(providerType: ProviderType): ModelMapping {
   const envModels: ModelMapping = {
-    ocr: process.env.AI_MODEL_OCR || process.env.OPENAI_MODEL_OCR,
-    summarization: process.env.AI_MODEL_SUMMARIZATION || process.env.OPENAI_MODEL_SUMMARIZATION,
-    validation: process.env.AI_MODEL_VALIDATION || process.env.OPENAI_MODEL_VALIDATION,
+    ocr: process.env.AI_MODEL_OCR,
+    summarization: process.env.AI_MODEL_SUMMARIZATION,
+    validation: process.env.AI_MODEL_VALIDATION,
     ocrFallback: process.env.AI_MODEL_OCR_FALLBACK,
   };
+
+  if (providerType === ProviderType.OPENAI) {
+    envModels.ocr ||= process.env.OPENAI_MODEL_OCR;
+    envModels.summarization ||= process.env.OPENAI_MODEL_SUMMARIZATION;
+    envModels.validation ||= process.env.OPENAI_MODEL_VALIDATION;
+  }
 
   // Remove undefined values
   Object.keys(envModels).forEach(key => {
@@ -382,7 +391,7 @@ function getModelMapping(): ModelMapping {
 
   // If env vars provided any models, use them
   if (Object.keys(envModels).length > 0) {
-    validateModelMapping(envModels);
+    validateModelMapping(providerType, envModels);
     return envModels;
   }
 
@@ -390,12 +399,50 @@ function getModelMapping(): ModelMapping {
   return {};
 }
 
-function validateModelMapping(models: ModelMapping): void {
+function hasConfiguredCredential(value: string | undefined): boolean {
+  return Boolean(value && !isPlaceholderCredential(value));
+}
+
+function getConfiguredCredential(name: string, value: string | undefined): string | undefined {
+  if (value && isPlaceholderCredential(value)) {
+    throw new Error(
+      `${name} is still set to a placeholder value. Replace it with a real credential or leave it unset.`
+    );
+  }
+
+  return value;
+}
+
+function isPlaceholderCredential(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === '' ||
+    normalized.includes('your_') ||
+    normalized.includes('placeholder') ||
+    normalized.includes('example') ||
+    normalized.endsWith('_here') ||
+    normalized === 'sk-proj-...'
+  );
+}
+
+function validateModelMapping(providerType: ProviderType, models: ModelMapping): void {
   for (const [key, model] of Object.entries(models)) {
-    if (model && model.startsWith('anthropic--')) {
+    if (!model || model === 'none') {
+      continue;
+    }
+
+    if (model.startsWith('anthropic--')) {
       throw new Error(
         `Invalid ${key} model "${model}". Use a direct Anthropic model ID instead of a legacy prefixed Claude alias.`
       );
+    }
+
+    if (providerType === ProviderType.OPENAI && !isOpenAI(model)) {
+      throw new Error(`Invalid ${key} model "${model}" for OpenAI provider. Use an OpenAI model ID.`);
+    }
+
+    if (providerType === ProviderType.ANTHROPIC && !isAnthropic(model)) {
+      throw new Error(`Invalid ${key} model "${model}" for Anthropic provider. Use an Anthropic model ID.`);
     }
   }
 }

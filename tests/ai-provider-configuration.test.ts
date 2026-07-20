@@ -76,6 +76,35 @@ describe('AI provider configuration', () => {
     expect(config.apiKey).toBe('anthropic-key');
   });
 
+  it('rejects placeholder OpenAI credentials before provider construction', async () => {
+    clearProviderEnv();
+    process.env.AI_PROVIDER = 'openai';
+    process.env.OPENAI_API_KEY = 'your_openai_api_key_here';
+
+    await expect(loadAIProviderConfig()).rejects.toThrow('OPENAI_API_KEY is still set to a placeholder');
+  });
+
+  it('does not apply OpenAI-specific model overrides to Anthropic provider configs', async () => {
+    clearProviderEnv();
+    process.env.AI_PROVIDER = 'anthropic';
+    process.env.ANTHROPIC_API_KEY = 'anthropic-key';
+    process.env.OPENAI_MODEL_OCR = 'gpt-5-mini';
+
+    const config = await loadAIProviderConfig();
+
+    expect(config.type).toBe(ProviderType.ANTHROPIC);
+    expect(config.models?.ocr).toBeUndefined();
+  });
+
+  it('rejects generic model overrides that do not match the selected provider', async () => {
+    clearProviderEnv();
+    process.env.AI_PROVIDER = 'anthropic';
+    process.env.ANTHROPIC_API_KEY = 'anthropic-key';
+    process.env.AI_MODEL_OCR = 'gpt-5-mini';
+
+    await expect(loadAIProviderConfig()).rejects.toThrow('Invalid ocr model "gpt-5-mini" for Anthropic provider');
+  });
+
   it('requires explicit provider when both provider credentials exist', async () => {
     clearProviderEnv();
     process.env.OPENAI_API_KEY = 'openai-key';
