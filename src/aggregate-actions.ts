@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import path from 'path';
-import { getAllImageFiles } from './utils';
+import dotenv from 'dotenv';
+import { getPrimaryMonitoredFolder } from './config';
+
+dotenv.config();
 
 interface ActionItem {
   text: string;
@@ -16,7 +19,7 @@ interface AggregationMetadata {
   itemsExcluded: number;
 }
 
-const MONITORED_FOLDER = path.resolve('/Users/I566809/Library/CloudStorage/OneDrive-SAPSE/Notes/ZZ_Raw');
+const MONITORED_FOLDER = getPrimaryMonitoredFolder();
 const COMPLETED_MARKERS = ['(Done)', '(done)', '[X]', '[x]'];
 
 /**
@@ -180,10 +183,10 @@ async function aggregateActionItems() {
     console.log(`
 Usage: npm run aggregate-actions [--output <path>]
 
-Aggregates all pending action items from meeting notes in ZZ_Raw folder.
+Aggregates all pending action items from meeting notes in the configured monitored folder.
 
 Options:
-  --output <path>    Custom output file path (default: ZZ_Raw/action-items-summary-MM-DD.md)
+  --output <path>    Custom output file path (default: monitored folder/action-items-summary-MM-DD.md)
   --help, -h         Show this help message
 
 Examples:
@@ -213,7 +216,7 @@ Examples:
     console.log('');
 
     if (summaryFiles.length === 0) {
-      console.log('⚠️  No summary files found in ZZ_Raw folder');
+      console.log('⚠️  No summary files found in monitored folder');
       process.exit(0);
     }
 

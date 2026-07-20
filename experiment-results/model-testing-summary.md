@@ -64,8 +64,9 @@
 # Best value (recommended)
 AI_MODEL_OCR=gpt-4.1
 
-# Highest accuracy alternative
-AI_MODEL_OCR=anthropic--claude-4.6-sonnet
+# Highest accuracy alternative, using provider-native Anthropic model IDs
+AI_PROVIDER=anthropic
+AI_MODEL_OCR=claude-sonnet-4-20250514
 ```
 
 ### Documentation Updates
@@ -93,7 +94,7 @@ Consider re-testing when:
 All results stored in `experiment-results/`:
 - `dynatrace-model-comparison.md` - Raw experiment output
 - `model-analysis.md` - Detailed analysis with recommendations
-- `model-discovery.md` - Available models from HAI proxy
+- `model-discovery.md` - Provider model availability notes
 - `model-testing-summary.md` - This summary document
 
 ## Conclusion

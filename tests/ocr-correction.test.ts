@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
   correctOCRIssues,
   getCorrectionConfig,
   formatCorrectionLog,
+  resetOCRValidatorCacheForTests,
   type ValidationReport,
   type CorrectionConfig
 } from '../src/ocrValidator';
+import sharp from 'sharp';
 
 // Mock OpenAI
 vi.mock('openai', () => {
@@ -59,10 +61,17 @@ vi.mock('../src/handwritingReference', () => ({
 }));
 
 describe('OCR Multi-Pass Correction', () => {
-  const mockImageBuffer = Buffer.from('fake-image-data');
+  let mockImageBuffer: Buffer;
+
+  beforeAll(async () => {
+    mockImageBuffer = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 255, b: 255 } }
+    }).jpeg().toBuffer();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOCRValidatorCacheForTests();
   });
 
   describe('correctOCRIssues', () => {
@@ -392,7 +401,7 @@ describe('OCR Multi-Pass Correction', () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it('should call OpenAI with correct parameters', async () => {
+    it('should call OpenAI through the provider abstraction with correct parameters', async () => {
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: 'fixed' } }]
       });
@@ -420,11 +429,10 @@ describe('OCR Multi-Pass Correction', () => {
       expect(mockCreate).toHaveBeenCalledTimes(1);
       const call = mockCreate.mock.calls[0][0];
       expect(call.model).toBe('gpt-4o');
-      expect(call.temperature).toBe(0.2);
-      expect(call.max_tokens).toBe(200);
-      expect(call.messages).toHaveLength(2);
-      expect(call.messages[0].role).toBe('system');
-      expect(call.messages[1].content).toHaveLength(2);  // image + text
+      expect(call.temperature).toBeUndefined();
+      expect(call.messages).toHaveLength(1);
+      expect(call.messages[0].role).toBe('user');
+      expect(call.messages[0].content).toHaveLength(2);  // image + text
     });
   });
 

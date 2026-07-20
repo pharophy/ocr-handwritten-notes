@@ -1,120 +1,131 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { processHandwrittenImage } from '../src/ocr';
-import { readFileSync } from 'fs';
-import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
+import { processHandwrittenImage, resetOCRCacheForTests } from '../src/ocr';
+
+vi.mock('openai', () => {
+  const mockCreate = vi.fn();
+  return {
+    default: class MockOpenAI {
+      chat = {
+        completions: {
+          create: mockCreate
+        }
+      };
+    },
+    mockCreate
+  };
+});
+
+const OpenAI = await import('openai');
+const mockCreate = (OpenAI as any).mockCreate;
+
+vi.mock('../src/handwritingReference', () => ({
+  loadHandwritingReference: vi.fn().mockResolvedValue({}),
+  loadReferenceImage: vi.fn().mockResolvedValue(null),
+  formatReferenceWordsForPrompt: vi.fn().mockReturnValue(''),
+  formatReferenceImageInstructions: vi.fn().mockReturnValue(''),
+  referenceImageExists: vi.fn().mockResolvedValue(false),
+  getDomainGlossary: vi.fn().mockReturnValue({}),
+  formatGlossaryContext: vi.fn().mockReturnValue(''),
+  loadAIProviderConfig: vi.fn().mockImplementation(async () => ({
+    type: 'openai',
+    apiKey: 'test-key',
+    baseURL: undefined,
+    models: {
+      ocr: process.env.AI_MODEL_OCR || 'gpt-4o',
+      ocrFallback: process.env.AI_MODEL_OCR_FALLBACK ?? 'gpt-4.1-mini',
+    }
+  }))
+}));
+
+async function testImage(): Promise<Buffer> {
+  return sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 255, b: 255 } }
+  }).jpeg().toBuffer();
+}
 
 describe('OCR Fallback Integration Tests', () => {
-  const testImagesDir = path.join(__dirname, 'test-images');
+  const originalFallback = process.env.AI_MODEL_OCR_FALLBACK;
+  const originalOcr = process.env.AI_MODEL_OCR;
 
-  // Helper to load test image
-  function loadTestImage(filename: string): Buffer {
-    const imagePath = path.join(testImagesDir, filename);
-    return readFileSync(imagePath);
-  }
-
-  describe('Cosine 02-26.jpeg - High Quality Baseline', () => {
-    it('should NOT trigger fallback with Claude 4.6 Sonnet (primary model succeeds)', async () => {
-      // This test validates that high-quality Claude output doesn't trigger fallback
-      const imageBuffer = loadTestImage('Cosine 02-26.jpeg');
-      const result = await processHandwrittenImage(imageBuffer, 'Cosine 02-26.jpeg');
-
-      expect(result).toBeTruthy();
-      expect(result!.text.length).toBeGreaterThan(100);
-
-      // Check that result has low illegible markers (< 10%)
-      const illegibleMatches = result!.text.match(/\*\[illegible\]\*/g) || [];
-      const words = result!.text.split(/[\s\n\r]+/).filter(w => w.length > 0);
-      const illegiblePercent = (illegibleMatches.length / words.length) * 100;
-
-      expect(illegiblePercent).toBeLessThan(10);
-    }, 90000);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOCRCacheForTests();
+    process.env.AI_MODEL_OCR = 'gpt-4o';
+    process.env.AI_MODEL_OCR_FALLBACK = 'gpt-4.1-mini';
   });
 
-  describe('Amir 04-01.jpeg - Poor Quality with Claude Opus', () => {
-    it('should trigger fallback when primary model produces poor quality', async () => {
-      // This test requires AI_MODEL_OCR to be set to Claude 4.6 Opus
-      // and AI_MODEL_OCR_FALLBACK to gpt-4.1-mini
-      // Run with: AI_MODEL_OCR=anthropic--claude-4.6-opus npm test
-
-      const imageBuffer = loadTestImage('Amir 04-01.jpeg');
-      const result = await processHandwrittenImage(imageBuffer, 'Amir 04-01.jpeg');
-
-      expect(result).toBeTruthy();
-
-      // If using Claude Opus as primary, it should produce poor quality and trigger fallback
-      // The fallback (GPT-4.1 Mini) should produce better results
-      // We can't guarantee which model was used without inspecting logs,
-      // but we can verify the result quality is reasonable
-
-      if (process.env.AI_MODEL_OCR?.includes('opus')) {
-        // With fallback enabled, result should be reasonable quality
-        expect(result!.text.length).toBeGreaterThan(50);
-      }
-    }, 120000); // Allow time for both primary + fallback
+  afterEach(() => {
+    process.env.AI_MODEL_OCR = originalOcr;
+    process.env.AI_MODEL_OCR_FALLBACK = originalFallback;
   });
 
-  describe('Fallback Disabled Scenario', () => {
-    it('should use primary result when AI_MODEL_OCR_FALLBACK=none', async () => {
-      // This test requires AI_MODEL_OCR_FALLBACK=none
-      // The quality assessment should still run, but no fallback should be triggered
+  it('should not trigger fallback when primary model succeeds', async () => {
+    mockCreate.mockResolvedValueOnce({
+      model: 'gpt-4o',
+      choices: [{ message: { content: 'This is a clean OCR result with enough content to pass quality checks.' } }]
+    });
 
-      const originalFallback = process.env.AI_MODEL_OCR_FALLBACK;
-      process.env.AI_MODEL_OCR_FALLBACK = 'none';
+    const result = await processHandwrittenImage(await testImage(), 'note.jpg');
 
-      try {
-        const imageBuffer = loadTestImage('Amir 04-01.jpeg');
-        const result = await processHandwrittenImage(imageBuffer, 'Amir 04-01.jpeg');
-
-        expect(result).toBeTruthy();
-        expect(result!.text.length).toBeGreaterThan(50);
-      } finally {
-        process.env.AI_MODEL_OCR_FALLBACK = originalFallback;
-      }
-    }, 90000);
+    expect(result?.text).toContain('clean OCR result');
+    expect(result?.modelUsed).toBe('gpt-4o');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  describe('Cross-Provider Fallback', () => {
-    it('should support Claude → OpenAI fallback', async () => {
-      // Test with Claude primary and GPT fallback
-      const originalOcr = process.env.AI_MODEL_OCR;
-      const originalFallback = process.env.AI_MODEL_OCR_FALLBACK;
+  it('should trigger fallback when primary model produces poor quality', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        model: 'gpt-4o',
+        choices: [{ message: { content: '*[illegible]* *[illegible]* *[illegible]* *[illegible]* *[illegible]*' } }]
+      })
+      .mockResolvedValueOnce({
+        model: 'gpt-4.1-mini',
+        choices: [{ message: { content: 'Fallback produced a readable transcription with enough content.' } }]
+      });
 
-      process.env.AI_MODEL_OCR = 'anthropic--claude-4.6-sonnet';
-      process.env.AI_MODEL_OCR_FALLBACK = 'gpt-4.1-mini';
+    const result = await processHandwrittenImage(await testImage(), 'note.jpg');
 
-      try {
-        const imageBuffer = loadTestImage('Amir 04-01.jpeg');
-        const result = await processHandwrittenImage(imageBuffer, 'Amir 04-01.jpeg');
+    expect(result?.text).toContain('Fallback produced');
+    expect(result?.modelUsed).toContain('fallback from gpt-4o');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
 
-        expect(result).toBeTruthy();
-        expect(result!.text.length).toBeGreaterThan(50);
-      } finally {
-        process.env.AI_MODEL_OCR = originalOcr;
-        process.env.AI_MODEL_OCR_FALLBACK = originalFallback;
-      }
-    }, 120000);
+  it('should use primary result when AI_MODEL_OCR_FALLBACK=none', async () => {
+    process.env.AI_MODEL_OCR_FALLBACK = 'none';
+    resetOCRCacheForTests();
 
-    it('should support OpenAI → Claude fallback', async () => {
-      // Test with OpenAI primary and Claude fallback
-      const originalOcr = process.env.AI_MODEL_OCR;
-      const originalFallback = process.env.AI_MODEL_OCR_FALLBACK;
-      const originalProvider = process.env.AI_PROVIDER;
+    mockCreate.mockResolvedValueOnce({
+      model: 'gpt-4o',
+      choices: [{ message: { content: '*[illegible]* *[illegible]* *[illegible]* *[illegible]* *[illegible]*' } }]
+    });
 
-      process.env.AI_PROVIDER = 'hai-openai';
-      process.env.AI_MODEL_OCR = 'gpt-4o';
-      process.env.AI_MODEL_OCR_FALLBACK = 'anthropic--claude-4.6-sonnet';
+    const result = await processHandwrittenImage(await testImage(), 'note.jpg');
 
-      try {
-        const imageBuffer = loadTestImage('Cosine 02-26.jpeg');
-        const result = await processHandwrittenImage(imageBuffer, 'Cosine 02-26.jpeg');
+    expect(result?.text).toContain('*[illegible]*');
+    expect(result?.modelUsed).toBe('gpt-4o');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
 
-        expect(result).toBeTruthy();
-        expect(result!.text.length).toBeGreaterThan(100);
-      } finally {
-        process.env.AI_MODEL_OCR = originalOcr;
-        process.env.AI_MODEL_OCR_FALLBACK = originalFallback;
-        process.env.AI_PROVIDER = originalProvider;
-      }
-    }, 120000);
+  it('should support OpenAI primary and OpenAI fallback model configuration', async () => {
+    process.env.AI_MODEL_OCR = 'gpt-5-mini';
+    process.env.AI_MODEL_OCR_FALLBACK = 'gpt-4.1-mini';
+    resetOCRCacheForTests();
+
+    mockCreate
+      .mockResolvedValueOnce({
+        model: 'gpt-5-mini',
+        choices: [{ message: { content: '*[illegible]* *[illegible]* *[illegible]* *[illegible]* *[illegible]*' } }]
+      })
+      .mockResolvedValueOnce({
+        model: 'gpt-4.1-mini',
+        choices: [{ message: { content: 'Fallback on the configured OpenAI provider succeeded.' } }]
+      });
+
+    const result = await processHandwrittenImage(await testImage(), 'note.jpg');
+
+    expect(result?.text).toContain('configured OpenAI provider');
+    expect(mockCreate.mock.calls[0][0].model).toBe('gpt-5-mini');
+    expect(mockCreate.mock.calls[1][0].model).toBe('gpt-4.1-mini');
   });
 });

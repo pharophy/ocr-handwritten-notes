@@ -108,10 +108,10 @@ This document provides an overview of all OCR accuracy experiments. For detailed
 - GPT-5: 82.3% accuracy at $0.10/image
 - **Takeaway**: Don't assume larger models are better for specific tasks
 
-### 2. HAI Proxy Model Limitations (Experiments 001-003)
-- HAI proxy only supports: gpt-5, gpt-5-mini, gpt-4.1, gpt-4.1-mini
-- Models NOT available: gpt-4o, gpt-4-vision-preview
-- **Takeaway**: Always verify API model availability before configuring
+### 2. Model Availability Must Be Verified (Experiments 001-003)
+- Provider model catalogs change over time.
+- Models may not be available to every account, endpoint, or SDK path.
+- **Takeaway**: Verify model availability with the configured direct provider before relying on a model in `.env`.
 
 ### 3. Formatting vs Content Accuracy Gap (All Experiments)
 - Character accuracy: 85-91% (good)

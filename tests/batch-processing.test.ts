@@ -165,7 +165,7 @@ describe('Batch Processing Specifications', () => {
       const folder = path.dirname(imagePath);
       const expectedPath = path.join(folder, `${baseName}.md`);
 
-      expect(expectedPath).toBe('/test/folder/meeting-notes.md');
+      expect(expectedPath).toBe(path.join('/test/folder', 'meeting-notes.md'));
     });
 
     it('Scenario: Summary output file creation - should create summary file', () => {
@@ -174,7 +174,7 @@ describe('Batch Processing Specifications', () => {
       const folder = path.dirname(imagePath);
       const expectedPath = path.join(folder, `${baseName} - Summary and Actions.md`);
 
-      expect(expectedPath).toBe('/test/folder/meeting-notes - Summary and Actions.md');
+      expect(expectedPath).toBe(path.join('/test/folder', 'meeting-notes - Summary and Actions.md'));
     });
   });
 

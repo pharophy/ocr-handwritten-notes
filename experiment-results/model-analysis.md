@@ -95,7 +95,7 @@ AI_MODEL_OCR=gpt-4.1
 ## Limitations
 
 1. **Single test image**: Results based on one handwriting sample
-2. **No GPT-4o data**: The "gpt-4o" model wasn't tested (not available in HAI proxy)
+2. **No GPT-4o data**: The "gpt-4o" model was not part of this test run
 3. **Estimated costs**: Based on token estimation, not actual API billing
 
 ## Next Steps

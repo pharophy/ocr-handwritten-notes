@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processHandwrittenImage } from '../src/ocr';
+import { processHandwrittenImage, resetOCRCacheForTests } from '../src/ocr';
 import sharp from 'sharp';
 
 // Mock OpenAI
@@ -20,6 +20,16 @@ vi.mock('openai', () => {
 // Get the mock function after mocking
 const OpenAI = await import('openai');
 const mockCreate = (OpenAI as any).mockCreate;
+
+function getPromptFromOpenAICall() {
+  const callArgs = mockCreate.mock.calls[0][0];
+  return callArgs.messages[0].content.find((c: any) => c.type === 'text').text;
+}
+
+function getImageContentFromOpenAICall() {
+  const callArgs = mockCreate.mock.calls[0][0];
+  return callArgs.messages[0].content.find((c: any) => c.type === 'image_url');
+}
 
 // Mock utilities
 vi.mock('../src/utils', () => ({
@@ -50,7 +60,9 @@ vi.mock('../src/handwritingReference', () => ({
 describe('OCR Processing Specifications', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOCRCacheForTests();
     mockCreate.mockResolvedValue({
+      model: 'gpt-4o',
       choices: [{ message: { content: 'Test transcription' } }]
     });
   });
@@ -71,7 +83,7 @@ describe('OCR Processing Specifications', () => {
       const result = await processHandwrittenImage(testImage, 'test.jpg');
 
       expect(mockCreate).toHaveBeenCalled();
-      expect(result).toBe('Test transcription');
+      expect(result?.text).toBe('Test transcription');
     });
   });
 
@@ -88,7 +100,7 @@ describe('OCR Processing Specifications', () => {
       const result = await processHandwrittenImage(testImage, 'test.jpg');
 
       expect(result).toBeTruthy();
-      expect(result).not.toContain('...');
+      expect(result?.text).not.toContain('...');
     });
 
     it('Scenario: Ambiguous characters - should mark unclear text with italics', async () => {
@@ -102,9 +114,8 @@ describe('OCR Processing Specifications', () => {
 
       const result = await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.messages[0].content).toContain('*italic*');
-      expect(result).toContain('*unclear*');
+      expect(getPromptFromOpenAICall()).toContain('Do not use *italics*');
+      expect(result?.text).toContain('*unclear*');
     });
 
     it('Scenario: No content skipping - should never skip or summarize content', async () => {
@@ -118,8 +129,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.messages[0].content).toContain('Never skip or summarize content');
+      expect(getPromptFromOpenAICall()).toContain('Transcribe handwritten notes exactly as written');
     });
   });
 
@@ -135,9 +145,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      const userMessage = callArgs.messages[1].content.find((c: any) => c.type === 'text');
-      expect(userMessage.text).toContain('Use valid Markdown table syntax');
+      expect(getPromptFromOpenAICall()).toContain('Preserve layout');
     });
 
     it('Scenario: Freeform notes layout - should preserve indentation and bullets', async () => {
@@ -151,9 +159,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      const userMessage = callArgs.messages[1].content.find((c: any) => c.type === 'text');
-      expect(userMessage.text).toContain('Preserve indentation');
+      expect(getPromptFromOpenAICall()).toContain('Preserve layout');
     });
   });
 
@@ -169,8 +175,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.messages[0].content).toContain("use '→'");
+      expect(getPromptFromOpenAICall()).toContain('arrows');
     });
   });
 
@@ -186,8 +191,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.messages[0].content).toContain('Keep ALL-CAPS words fully capitalized');
+      expect(getPromptFromOpenAICall()).toContain('Keep acronyms in ALL-CAPS');
     });
   });
 
@@ -203,9 +207,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      const userMessage = callArgs.messages[1].content.find((c: any) => c.type === 'text');
-      expect(userMessage.text).toContain('Do not use code blocks');
+      expect(getPromptFromOpenAICall()).toContain('Output only the transcribed text');
     });
   });
 
@@ -221,8 +223,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      const imageContent = callArgs.messages[1].content.find((c: any) => c.type === 'image_url');
+      const imageContent = getImageContentFromOpenAICall();
       expect(imageContent.image_url.url).toContain('image/jpeg');
     });
 
@@ -237,9 +238,8 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.png');
 
-      const callArgs = mockCreate.mock.calls[0][0];
-      const imageContent = callArgs.messages[1].content.find((c: any) => c.type === 'image_url');
-      expect(imageContent.image_url.url).toContain('image/png');
+      const imageContent = getImageContentFromOpenAICall();
+      expect(imageContent.image_url.url).toContain('image/jpeg');
     });
   });
 

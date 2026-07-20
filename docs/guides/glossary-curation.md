@@ -78,7 +78,7 @@ Edit `handwriting-reference.json`:
 **For acronyms:**
 ```json
 "acronyms": {
-  "BTP": "Business Technology Platform, SAP cloud platform",
+  "BTP": "Business Technology Platform",
   "K8s": "Kubernetes"
 }
 ```
