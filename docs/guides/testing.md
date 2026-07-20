@@ -35,6 +35,22 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 `ANTHROPIC_BASE_URL` is optional and may point at an Anthropic-compatible endpoint.
 
+## Live OCR Validation
+
+Run the provider smoke test to confirm the configured provider can perform real OCR:
+
+```bash
+RUN_OCR_ACCURACY_TESTS=true npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose
+```
+
+The smoke test makes a real API call and checks that OCR returns non-empty text from a provider model. Strict phrase and line-position accuracy checks are benchmark tests because OCR output can vary between model runs.
+
+To run the full benchmark suite, opt in explicitly:
+
+```bash
+RUN_OCR_ACCURACY_TESTS=true RUN_OCR_BENCHMARK_TESTS=true npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose
+```
+
 ## Models Tested
 
 ### OpenAI

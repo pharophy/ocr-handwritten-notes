@@ -62,7 +62,7 @@ for config in "${models[@]}"; do
     echo ""
   } >> "$RESULTS_FILE"
 
-  RUN_OCR_ACCURACY_TESTS=true npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
+  RUN_OCR_ACCURACY_TESTS=true RUN_OCR_BENCHMARK_TESTS=true npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
   echo "" >> "$RESULTS_FILE"
 done
 

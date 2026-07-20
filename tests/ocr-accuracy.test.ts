@@ -7,16 +7,32 @@ import path from 'path';
 /**
  * OCR Accuracy Tests - Ground Truth Validation
  *
- * These tests verify OCR accuracy against manually verified transcriptions.
- * If tests fail, it indicates a regression in OCR quality.
+ * The live smoke tests verify the configured provider can perform real OCR.
+ * The benchmark tests verify OCR accuracy against manually verified transcriptions.
  *
  * NOTE: These are integration tests that make real API calls.
- * They require OPENAI_API_KEY to be set and will take ~5-10 seconds per test.
+ * They require provider credentials and will take ~5-10 seconds per test.
  */
 const runLiveOCRAccuracyTests = process.env.RUN_OCR_ACCURACY_TESTS === 'true';
+const runOCRBenchmarkTests = process.env.RUN_OCR_BENCHMARK_TESTS === 'true';
 const describeLive = runLiveOCRAccuracyTests ? describe : describe.skip;
+const describeBenchmark = runLiveOCRAccuracyTests && runOCRBenchmarkTests ? describe : describe.skip;
 
-describeLive('OCR Accuracy - Ground Truth Validation', () => {
+describeLive('OCR Provider Integration', () => {
+  it('should perform live OCR with the configured provider', async () => {
+    const imagePath = path.resolve(process.cwd(), 'test-images/Cosine 02-26.jpeg');
+    const imageBuffer = await fs.readFile(imagePath);
+    const ocrResult = await processHandwrittenImage(imageBuffer, 'Cosine 02-26.jpeg');
+
+    expect(ocrResult).toBeTruthy();
+    expect(ocrResult?.modelUsed).toMatch(/^(gpt|claude)-/);
+    expect(ocrResult?.text).toBeTruthy();
+    expect(ocrResult!.text.length).toBeGreaterThan(100);
+    expect(ocrResult!.text).not.toMatch(/Connection error|API key is required|Incorrect API key/i);
+  }, 90000);
+});
+
+describeBenchmark('OCR Accuracy - Ground Truth Validation', () => {
   describe('Cosine 02-26 - Opening Lines', () => {
     it('should accurately transcribe the first few lines', async () => {
       // Ground truth - manually verified correct transcription
