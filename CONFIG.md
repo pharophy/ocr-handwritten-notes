@@ -16,7 +16,7 @@ If `AI_PROVIDER` is omitted, provider inference is only safe when exactly one pr
 
 ```env
 AI_PROVIDER=openai
-OPENAI_API_KEY=your_openai_api_key_here
+# OPENAI_API_KEY=sk-proj-...
 
 AI_MODEL_OCR=gpt-5-mini
 AI_MODEL_OCR_FALLBACK=gpt-4.1-mini
@@ -36,7 +36,7 @@ OPENAI_MODEL_VALIDATION=gpt-5-mini
 
 ```env
 AI_PROVIDER=anthropic
-ANTHROPIC_AUTH_TOKEN=your_anthropic_auth_token_here
+# ANTHROPIC_AUTH_TOKEN=your_anthropic_auth_token_here
 # or
 # ANTHROPIC_API_KEY=your_anthropic_api_key_here
 

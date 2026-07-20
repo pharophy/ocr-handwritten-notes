@@ -12,6 +12,14 @@ fi
 
 if [ -f .env ]; then
   cp .env .env.backup
+  set -a
+  . ./.env
+  set +a
+fi
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+  echo "OPENAI_API_KEY is required. Set it in your shell or existing .env before running this script."
+  exit 1
 fi
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -34,6 +42,7 @@ for config in "${models[@]}"; do
   echo "Test $test_count/${#models[@]}: $description"
 
   cp .env.direct.openai .env
+  echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env
 
   if grep -q "^AI_MODEL_OCR=" .env; then
     sed -i.bak "s|^AI_MODEL_OCR=.*|AI_MODEL_OCR=$model|" .env
@@ -53,7 +62,7 @@ for config in "${models[@]}"; do
     echo ""
   } >> "$RESULTS_FILE"
 
-  npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
+  RUN_OCR_ACCURACY_TESTS=true npx vitest run tests/ocr-accuracy.test.ts --reporter=verbose 2>&1 | tee -a "$RESULTS_FILE"
   echo "" >> "$RESULTS_FILE"
 done
 
