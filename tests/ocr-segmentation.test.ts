@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import {
   segmentImageVertically,
   stitchSegmentTranscriptions,
+  findEmptySegments,
   SEGMENT_MAX_HEIGHT,
   SEGMENT_OVERLAP,
 } from '../src/ocr';
@@ -99,5 +100,87 @@ describe('Segment transcription stitching', () => {
     const result = stitchSegmentTranscriptions(['- item\nother', '- item']);
     // Not consecutive after the "other" line, so both "- item" lines survive.
     expect(result.split('\n').filter(l => l === '- item')).toHaveLength(2);
+  });
+
+  it('removes a MULTI-line overlap block as a unit, not just single duplicates', () => {
+    // A 200px overlap spans several handwriting lines, so the tail of one
+    // segment and the head of the next repeat a *block* of lines. Naive
+    // adjacent-line dedup would leave "C\nD" duplicated because the repeated
+    // lines are not adjacent to their twins after joining.
+    const result = stitchSegmentTranscriptions([
+      'A\nB\nC\nD',
+      'C\nD\nE\nF',
+    ]);
+    expect(result).toBe('A\nB\nC\nD\nE\nF');
+  });
+
+  it('splices at the largest matching block when overlap and later content coincide', () => {
+    const result = stitchSegmentTranscriptions([
+      'intro\nstep one\nstep two',
+      'step one\nstep two\nconclusion',
+    ]);
+    expect(result).toBe('intro\nstep one\nstep two\nconclusion');
+  });
+
+  it('preserves legitimately repeated ADJACENT lines within a segment', () => {
+    // Two identical adjacent lines inside one segment are real content, not an
+    // overlap artifact, and must not be collapsed.
+    const result = stitchSegmentTranscriptions([
+      'header\n- todo\n- todo',
+      'footer',
+    ]);
+    expect(result).toBe('header\n- todo\n- todo\nfooter');
+  });
+
+  it('matches overlap by trimmed content while preserving original indentation', () => {
+    const result = stitchSegmentTranscriptions([
+      'line X\n    line Y',
+      'line Y\nline Z',
+    ]);
+    // Boundary line Y matches despite differing indentation; the first
+    // segment's indented version is kept and line Z is appended once.
+    expect(result).toBe('line X\n    line Y\nline Z');
+  });
+
+  it('matches the previous single-line overlap behavior', () => {
+    const result = stitchSegmentTranscriptions([
+      'top line\nshared line',
+      'shared line\nbottom line',
+    ]);
+    expect(result).toBe('top line\nshared line\nbottom line');
+  });
+});
+
+describe('Empty-segment detection (incomplete transcription)', () => {
+  it('reports no empties when every segment has text', () => {
+    const result = findEmptySegments(['a', 'b', 'c']);
+    expect(result.emptyIndices).toEqual([]);
+    expect(result.incomplete).toBe(false);
+  });
+
+  it('does NOT flag incomplete when only the final segment is blank (trailing page space)', () => {
+    const result = findEmptySegments(['a', 'b', '   ']);
+    expect(result.emptyIndices).toEqual([2]);
+    expect(result.incomplete).toBe(false);
+  });
+
+  it('flags incomplete when an interior segment produced no text', () => {
+    // A middle band of the page came back empty — a dropped/failed OCR call
+    // that would otherwise be silently swallowed by stitching.
+    const result = findEmptySegments(['a', '', 'c']);
+    expect(result.emptyIndices).toEqual([1]);
+    expect(result.incomplete).toBe(true);
+  });
+
+  it('flags incomplete when a leading segment is empty', () => {
+    const result = findEmptySegments(['', 'b', 'c']);
+    expect(result.emptyIndices).toEqual([0]);
+    expect(result.incomplete).toBe(true);
+  });
+
+  it('does not flag a single empty segment as incomplete (caller handles empty content)', () => {
+    const result = findEmptySegments(['']);
+    expect(result.emptyIndices).toEqual([0]);
+    expect(result.incomplete).toBe(false);
   });
 });

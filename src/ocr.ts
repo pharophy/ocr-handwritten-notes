@@ -364,29 +364,80 @@ export async function segmentImageVertically(
 }
 
 /**
+ * Split text into lines with leading/trailing blank lines removed.
+ */
+function toTrimmedLines(text: string): string[] {
+  const lines = text.split('\n');
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') start++;
+  while (end > start && lines[end - 1].trim() === '') end--;
+  return lines.slice(start, end);
+}
+
+/**
+ * Number of trailing lines of `prev` that equal the leading lines of `next`
+ * (compared by trimmed content). Prefers the largest match so a multi-line
+ * overlap block is removed as a single unit instead of leaving interior
+ * duplicates behind.
+ */
+function overlapLineCount(prev: string[], next: string[]): number {
+  const max = Math.min(prev.length, next.length);
+  for (let k = max; k > 0; k--) {
+    let match = true;
+    for (let j = 0; j < k; j++) {
+      if (prev[prev.length - k + j].trim() !== next[j].trim()) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return k;
+  }
+  return 0;
+}
+
+/**
  * Stitch per-segment transcriptions into a single document.
  *
- * Because segments overlap, a line can be transcribed at the end of one segment and
- * the start of the next. We drop consecutive duplicate (trimmed) lines to absorb the
- * common case of overlap-induced repetition.
+ * Segments overlap vertically, so a block of lines can be transcribed at the end
+ * of one segment and again at the start of the next. We splice each incoming
+ * segment onto the accumulated output at the largest matching line-block boundary,
+ * which removes the overlap block as a unit (however many lines it spans) while
+ * leaving legitimately repeated lines *within* a segment untouched.
  */
 export function stitchSegmentTranscriptions(parts: string[]): string {
-  const combined = parts
-    .map(part => part.trim())
-    .filter(part => part.length > 0)
-    .join('\n');
-
   const out: string[] = [];
-  for (const line of combined.split('\n')) {
-    const trimmed = line.trim();
-    const prevTrimmed = out.length > 0 ? out[out.length - 1].trim() : null;
-    if (trimmed !== '' && trimmed === prevTrimmed) {
-      continue; // overlap duplicate
+  for (const part of parts) {
+    const lines = toTrimmedLines(part);
+    if (lines.length === 0) continue; // empty / whitespace-only segment
+    if (out.length === 0) {
+      out.push(...lines);
+      continue;
     }
-    out.push(line);
+    const overlap = overlapLineCount(out, lines);
+    out.push(...lines.slice(overlap));
   }
 
   return out.join('\n');
+}
+
+/**
+ * Inspect per-segment transcriptions for missing text.
+ *
+ * An empty *interior* segment (any index except the last) means a middle band of
+ * the page produced no text — almost always a failed/truncated OCR call rather
+ * than genuinely blank paper, so the transcription is flagged `incomplete`. An
+ * empty *final* segment is common (blank trailing page space) and does not, on
+ * its own, mark the result incomplete.
+ */
+export function findEmptySegments(parts: string[]): { emptyIndices: number[]; incomplete: boolean } {
+  const emptyIndices: number[] = [];
+  parts.forEach((part, i) => {
+    if (part.trim() === '') emptyIndices.push(i);
+  });
+  const lastIndex = parts.length - 1;
+  const incomplete = emptyIndices.some(i => i !== lastIndex);
+  return { emptyIndices, incomplete };
 }
 
 /**
@@ -399,7 +450,7 @@ async function transcribeImage(
   preprocessedBuffer: Buffer,
   prompt: string,
   modelType: ModelType
-): Promise<{ content: string; model: string }> {
+): Promise<{ content: string; model: string; incomplete: boolean }> {
   const compressionConfig = getCompressionConfig();
   const segments = await segmentImageVertically(preprocessedBuffer);
 
@@ -438,7 +489,18 @@ async function transcribeImage(
     model = response.model;
   }
 
-  return { content: stitchSegmentTranscriptions(parts), model };
+  // A single-segment image that comes back empty is handled by the caller's
+  // existing empty-content check, so only multi-segment runs are inspected for
+  // an interior segment that dropped out.
+  const { emptyIndices, incomplete } = findEmptySegments(parts);
+  if (emptyIndices.length > 0) {
+    console.log(
+      `⚠️  ${emptyIndices.length}/${segments.length} segment(s) returned no text (indices: ${emptyIndices.join(', ')})` +
+      (incomplete ? ' — marking transcription incomplete so fallback can run' : '')
+    );
+  }
+
+  return { content: stitchSegmentTranscriptions(parts), model, incomplete };
 }
 
 export async function processHandwrittenImage(imageBuffer: Buffer, filename: string): Promise<{ text: string; modelUsed: string } | null> {
@@ -518,11 +580,15 @@ Output only the transcribed text, no explanation.
       isPoorQuality: primaryQuality.isPoorQuality,
     });
 
-    // Check if fallback is needed and configured
+    // Check if fallback is needed and configured. An incomplete segmented
+    // transcription (an interior segment produced no text) is treated like poor
+    // quality so we don't silently return a page with a missing middle section.
     const fallbackModel = cachedProvider!.getProviderConfig().models?.ocrFallback;
+    const needsFallback = primaryQuality.isPoorQuality || response.incomplete;
 
-    if (primaryQuality.isPoorQuality && fallbackModel && fallbackModel !== 'none' && fallbackModel !== '') {
-      console.log(`⚠️  Primary quality poor (${primaryQuality.reason}), trying fallback: ${fallbackModel}`);
+    if (needsFallback && fallbackModel && fallbackModel !== 'none' && fallbackModel !== '') {
+      const fallbackReason = response.incomplete ? 'incomplete segmented transcription' : primaryQuality.reason;
+      console.log(`⚠️  Primary quality poor (${fallbackReason}), trying fallback: ${fallbackModel}`);
 
       try {
         // Get current provider config
