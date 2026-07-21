@@ -8,8 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Vertical segmentation for tall images: pages taller than `SEGMENT_MAX_HEIGHT`
+  (2200px) are split into full-resolution overlapping strips, OCR'd separately,
+  and stitched back together so tall notes are no longer downsampled to illegibility
+- Detection of dropped OCR segments: an empty interior segment marks the
+  transcription incomplete and triggers the fallback model instead of silently
+  returning a page with a missing section
 - Documentation reorganization with docs/ directory structure
 - Comprehensive documentation audit and cleanup plan
+
+### Changed
+- OCR preprocessing now caps image width only (preserving aspect ratio) instead of
+  forcing both width and height into a bounding box, which previously squished tall
+  pages horizontally
+- Reasoning models (`gpt-5*`, `gpt-4.1*`) now request up to 16000 completion tokens
+  so hidden reasoning tokens no longer exhaust the budget and leave empty output
+
+### Fixed
+- Hallucinated OCR output on very tall images (e.g. long stitched note scans) caused
+  by horizontal squishing before the vision call
+- Empty summaries from reasoning models when reasoning tokens consumed the entire
+  `max_completion_tokens` budget
 
 ## [1.3.0] - 2026-04-10
 
