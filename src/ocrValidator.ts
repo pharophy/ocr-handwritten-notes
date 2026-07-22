@@ -591,11 +591,14 @@ function getIssueGuidance(issue: ValidationIssue, glossary: any): string {
   return hints.join('\n');
 }
 
+// Reply a strip returns when the phrase to correct is not visible in it. Kept as a
+// single constant so the prompt instruction and the leak-guard below can't drift.
+const NOT_PRESENT_SENTINEL = 'NOT_PRESENT';
+const NOT_PRESENT_PATTERN = new RegExp(`^${NOT_PRESENT_SENTINEL}\\b`, 'i');
+
 /**
  * Requests phrase correction via AI provider
  */
-const NOT_PRESENT_SENTINEL = 'NOT_PRESENT';
-
 async function requestPhraseCorrection(
   imageBuffer: Buffer,
   prompt: string
@@ -642,7 +645,7 @@ async function requestPhraseCorrection(
       const corrected = response.content?.trim();
       if (!corrected) continue;
       // Guard against the sentinel leaking into the transcription as a "correction".
-      if (multiSegment && /^NOT_PRESENT\b/i.test(corrected)) continue;
+      if (multiSegment && NOT_PRESENT_PATTERN.test(corrected)) continue;
       return corrected;
     }
 
