@@ -1,6 +1,6 @@
 import path from 'path';
 import sharp from 'sharp';
-import { createAIProvider, AIProvider, AIProviderConfig } from './aiProvider';
+import { createAIProvider, AIProvider, AIProviderConfig, ModelType } from './aiProvider';
 import {
   loadHandwritingReference,
   loadReferenceImage,
@@ -18,10 +18,17 @@ import {
 // ============================================================================
 
 // Image preprocessing constants (exported for use in validation pipeline)
-export const PREPROCESSING_WIDTH = 1600;           // Max width for preprocessed images
-export const PREPROCESSING_HEIGHT = 7000;          // Max height for preprocessed images
+export const PREPROCESSING_WIDTH = 1600;           // Max width for preprocessed images (height is uncapped; tall pages are segmented instead)
 export const PREPROCESSING_QUALITY = 95;           // Initial JPEG quality before compression
 export const PREPROCESSING_SHARPEN_SIGMA = 1.0;    // Sharpening intensity
+
+// Vertical segmentation for tall images.
+// Very tall pages (long notes, stitched scans) get downsampled to illegibility when
+// sent to a vision model as a single image, which causes it to hallucinate plausible
+// but incorrect text. Instead we split them into full-resolution vertical segments,
+// OCR each, and stitch the results back together.
+export const SEGMENT_MAX_HEIGHT = 2200;            // Max pixel height per OCR segment
+export const SEGMENT_OVERLAP = 200;                // Vertical overlap between segments (px) so lines aren't clipped at boundaries
 
 // Compression quality levels (progressive reduction)
 export const COMPRESSION_QUALITY_HIGH = 90;        // First attempt
@@ -316,6 +323,204 @@ export function condenseBulletLines(text: string): string {
   return condensed.join('\n');
 }
 
+/**
+ * Preprocess a source image for OCR.
+ *
+ * Caps the WIDTH only (preserving aspect ratio, never enlarging) so tall pages are
+ * never squished or downsampled to illegibility to fit a height box. Height is handled
+ * downstream by vertical segmentation, which keeps handwriting at full resolution.
+ * Shared by the primary OCR path and the correction path so both send the model the
+ * same, legible imagery.
+ */
+export async function preprocessImageForOCR(imageBuffer: Buffer): Promise<Buffer> {
+  return sharp(imageBuffer)
+    .grayscale()
+    .resize({ width: PREPROCESSING_WIDTH, fit: 'inside', withoutEnlargement: true })
+    .normalize()
+    .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
+    .jpeg({ quality: PREPROCESSING_QUALITY })  // High quality initial conversion, compression will reduce if needed
+    .toBuffer();
+}
+
+/**
+ * Split a (preprocessed) image into full-resolution vertical segments.
+ *
+ * Segments overlap by `overlap` pixels so a line of text straddling a boundary
+ * appears intact in at least one segment. Returns a single-element array when the
+ * image is short enough to OCR in one pass.
+ */
+export async function segmentImageVertically(
+  buffer: Buffer,
+  maxHeight: number = SEGMENT_MAX_HEIGHT,
+  overlap: number = SEGMENT_OVERLAP
+): Promise<Buffer[]> {
+  const meta = await sharp(buffer).metadata();
+  const width = meta.width ?? 0;
+  const height = meta.height ?? 0;
+
+  if (!width || !height || height <= maxHeight) {
+    return [buffer];
+  }
+
+  const step = Math.max(1, maxHeight - overlap);
+  const segments: Buffer[] = [];
+
+  for (let top = 0; top < height; top += step) {
+    const segHeight = Math.min(maxHeight, height - top);
+    if (segHeight <= 0) break;
+
+    const segment = await sharp(buffer)
+      .extract({ left: 0, top, width, height: segHeight })
+      .jpeg({ quality: PREPROCESSING_QUALITY })
+      .toBuffer();
+    segments.push(segment);
+
+    if (top + segHeight >= height) break;
+  }
+
+  return segments;
+}
+
+/**
+ * Split text into lines with leading/trailing blank lines removed.
+ */
+function toTrimmedLines(text: string): string[] {
+  const lines = text.split('\n');
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') start++;
+  while (end > start && lines[end - 1].trim() === '') end--;
+  return lines.slice(start, end);
+}
+
+/**
+ * Number of trailing lines of `prev` that equal the leading lines of `next`
+ * (compared by trimmed content). Prefers the largest match so a multi-line
+ * overlap block is removed as a single unit instead of leaving interior
+ * duplicates behind.
+ */
+function overlapLineCount(prev: string[], next: string[]): number {
+  const max = Math.min(prev.length, next.length);
+  for (let k = max; k > 0; k--) {
+    let match = true;
+    for (let j = 0; j < k; j++) {
+      if (prev[prev.length - k + j].trim() !== next[j].trim()) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return k;
+  }
+  return 0;
+}
+
+/**
+ * Stitch per-segment transcriptions into a single document.
+ *
+ * Segments overlap vertically, so a block of lines can be transcribed at the end
+ * of one segment and again at the start of the next. We splice each incoming
+ * segment onto the accumulated output at the largest matching line-block boundary,
+ * which removes the overlap block as a unit (however many lines it spans) while
+ * leaving legitimately repeated lines *within* a segment untouched.
+ */
+export function stitchSegmentTranscriptions(parts: string[]): string {
+  const out: string[] = [];
+  for (const part of parts) {
+    const lines = toTrimmedLines(part);
+    if (lines.length === 0) continue; // empty / whitespace-only segment
+    if (out.length === 0) {
+      out.push(...lines);
+      continue;
+    }
+    const overlap = overlapLineCount(out, lines);
+    out.push(...lines.slice(overlap));
+  }
+
+  return out.join('\n');
+}
+
+/**
+ * Inspect per-segment transcriptions for missing text.
+ *
+ * An empty *interior* segment (any index except the last) means a middle band of
+ * the page produced no text — almost always a failed/truncated OCR call rather
+ * than genuinely blank paper, so the transcription is flagged `incomplete`. An
+ * empty *final* segment is common (blank trailing page space) and does not, on
+ * its own, mark the result incomplete.
+ */
+export function findEmptySegments(parts: string[]): { emptyIndices: number[]; incomplete: boolean } {
+  const emptyIndices: number[] = [];
+  parts.forEach((part, i) => {
+    if (part.trim() === '') emptyIndices.push(i);
+  });
+  const lastIndex = parts.length - 1;
+  const incomplete = emptyIndices.some(i => i !== lastIndex);
+  return { emptyIndices, incomplete };
+}
+
+/**
+ * Transcribe a preprocessed image with the given provider, segmenting tall images
+ * into vertical strips so nothing is lost to downsampling. Returns an AIResponse-like
+ * object so callers can treat single- and multi-segment paths uniformly.
+ */
+async function transcribeImage(
+  provider: AIProvider,
+  preprocessedBuffer: Buffer,
+  prompt: string,
+  modelType: ModelType
+): Promise<{ content: string; model: string; incomplete: boolean }> {
+  const compressionConfig = getCompressionConfig();
+  const segments = await segmentImageVertically(preprocessedBuffer);
+
+  if (segments.length > 1) {
+    console.log(`🧩 Tall image split into ${segments.length} vertical segments for OCR`);
+  }
+
+  const mime = 'image/jpeg'; // Always JPEG after preprocessing
+  const parts: string[] = [];
+  let model = '';
+
+  for (let i = 0; i < segments.length; i++) {
+    let segmentBuffer = segments[i];
+
+    if (compressionConfig.enabled) {
+      const compressionResult = await compressImageIfNeeded(
+        segmentBuffer,
+        compressionConfig.maxSizeBytes,
+        compressionConfig.minQuality
+      );
+      segmentBuffer = compressionResult.buffer;
+    }
+
+    const base64Image = segmentBuffer.toString('base64');
+    const segmentPrompt = segments.length > 1
+      ? `${prompt}\n\nThis is vertical section ${i + 1} of ${segments.length} of a single page. Transcribe only the text visible in this section. Do not add a title, section number, or any commentary.`
+      : prompt;
+
+    const response = await provider.generateVisionCompletion(
+      segmentPrompt,
+      base64Image,
+      mime,
+      modelType
+    );
+    parts.push(response.content || '');
+    model = response.model;
+  }
+
+  // A single-segment image that comes back empty is handled by the caller's
+  // existing empty-content check, so only multi-segment runs are inspected for
+  // an interior segment that dropped out.
+  const { emptyIndices, incomplete } = findEmptySegments(parts);
+  if (emptyIndices.length > 0) {
+    console.log(
+      `⚠️  ${emptyIndices.length}/${segments.length} segment(s) returned no text (indices: ${emptyIndices.join(', ')})` +
+      (incomplete ? ' — marking transcription incomplete so fallback can run' : '')
+    );
+  }
+
+  return { content: stitchSegmentTranscriptions(parts), model, incomplete };
+}
+
 export async function processHandwrittenImage(imageBuffer: Buffer, filename: string): Promise<{ text: string; modelUsed: string } | null> {
   try {
     // Load handwriting reference and AI provider (cached after first load)
@@ -337,37 +542,8 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
       referenceLoaded = true;
     }
 
-    // Preprocess the image using sharp
-    // Ensure dimensions are within provider limits
-    const preprocessedBuffer = await sharp(imageBuffer)
-      .grayscale()
-      .resize({ width: PREPROCESSING_WIDTH, height: PREPROCESSING_HEIGHT, fit: 'inside' })
-      .normalize()
-      .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
-      .jpeg({ quality: PREPROCESSING_QUALITY })  // High quality initial conversion, compression will reduce if needed
-      .toBuffer();
-
-    // Compress image if needed (for images >5MB)
-    const compressionConfig = getCompressionConfig();
-    let finalBuffer = preprocessedBuffer;
-
-    if (compressionConfig.enabled) {
-      const compressionResult = await compressImageIfNeeded(
-        preprocessedBuffer,
-        compressionConfig.maxSizeBytes,
-        compressionConfig.minQuality
-      );
-      finalBuffer = compressionResult.buffer;
-
-      // Log compression if it occurred
-      if (compressionResult.compressed && compressionResult.metrics) {
-        const { originalSize, compressedSize, quality, ratio } = compressionResult.metrics;
-        console.log(`✓ Image compressed: ${(originalSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB → ${(compressedSize / BYTES_PER_MB).toFixed(SIZE_DECIMAL_PLACES)}MB (quality=${quality}, ratio=${ratio.toFixed(RATIO_DECIMAL_PLACES)}x)`);
-      }
-    }
-
-    const base64Image = finalBuffer.toString('base64');
-    const mime = 'image/jpeg'; // Always JPEG after preprocessing
+    // Preprocess the image (width-only cap; tall pages are segmented downstream).
+    const preprocessedBuffer = await preprocessImageForOCR(imageBuffer);
 
     // Get domain glossary from cached reference
     const glossary = getDomainGlossary(cachedReference || {});
@@ -393,14 +569,8 @@ Output only the transcribed text, no explanation.
     // Build combined prompt including reference image context if available
     let combinedPrompt = systemPrompt + '\n\n' + userPrompt;
 
-    // For providers that support vision with multiple images (OpenAI), we can include the reference image
-    // For now, we'll use a single-image approach that works with all providers
-    const response = await cachedProvider!.generateVisionCompletion(
-      combinedPrompt,
-      base64Image,
-      mime,
-      'ocr'
-    );
+    // Transcribe the image, segmenting tall pages into full-resolution vertical strips.
+    const response = await transcribeImage(cachedProvider!, preprocessedBuffer, combinedPrompt, 'ocr');
 
     const primaryResult = response.content || null;
     if (!primaryResult) {
@@ -419,11 +589,15 @@ Output only the transcribed text, no explanation.
       isPoorQuality: primaryQuality.isPoorQuality,
     });
 
-    // Check if fallback is needed and configured
+    // Check if fallback is needed and configured. An incomplete segmented
+    // transcription (an interior segment produced no text) is treated like poor
+    // quality so we don't silently return a page with a missing middle section.
     const fallbackModel = cachedProvider!.getProviderConfig().models?.ocrFallback;
+    const needsFallback = primaryQuality.isPoorQuality || response.incomplete;
 
-    if (primaryQuality.isPoorQuality && fallbackModel && fallbackModel !== 'none' && fallbackModel !== '') {
-      console.log(`⚠️  Primary quality poor (${primaryQuality.reason}), trying fallback: ${fallbackModel}`);
+    if (needsFallback && fallbackModel && fallbackModel !== 'none' && fallbackModel !== '') {
+      const fallbackReason = response.incomplete ? 'incomplete segmented transcription' : primaryQuality.reason;
+      console.log(`⚠️  Primary quality poor (${fallbackReason}), trying fallback: ${fallbackModel}`);
 
       try {
         // Get current provider config
@@ -437,14 +611,9 @@ Output only the transcribed text, no explanation.
           models: { ocr: fallbackModel },
         };
 
-        // Create fallback provider and run OCR
+        // Create fallback provider and run OCR (segments tall images just like the primary path)
         const fallbackProvider = createAIProvider(fallbackConfig);
-        const fallbackResponse = await fallbackProvider.generateVisionCompletion(
-          combinedPrompt,
-          base64Image,
-          mime,
-          'ocr'
-        );
+        const fallbackResponse = await transcribeImage(fallbackProvider, preprocessedBuffer, combinedPrompt, 'ocr');
 
         const fallbackResult = fallbackResponse.content || null;
         if (!fallbackResult) {

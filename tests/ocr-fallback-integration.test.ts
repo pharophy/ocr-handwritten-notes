@@ -44,6 +44,13 @@ async function testImage(): Promise<Buffer> {
   }).jpeg().toBuffer();
 }
 
+// Tall enough to be split into multiple vertical OCR segments (> SEGMENT_MAX_HEIGHT).
+async function tallImage(): Promise<Buffer> {
+  return sharp({
+    create: { width: 1000, height: 5000, channels: 3, background: { r: 255, g: 255, b: 255 } }
+  }).jpeg().toBuffer();
+}
+
 describe('OCR Fallback Integration Tests', () => {
   const originalFallback = process.env.AI_MODEL_OCR_FALLBACK;
   const originalOcr = process.env.AI_MODEL_OCR;
@@ -127,5 +134,57 @@ describe('OCR Fallback Integration Tests', () => {
     expect(result?.text).toContain('configured OpenAI provider');
     expect(mockCreate.mock.calls[0][0].model).toBe('gpt-5-mini');
     expect(mockCreate.mock.calls[1][0].model).toBe('gpt-4.1-mini');
+  });
+
+  describe('tall-image segmentation', () => {
+    it('OCRs a tall image as multiple segments and stitches them without fallback', async () => {
+      // 1000x5000 preprocessed image → 3 vertical segments.
+      mockCreate
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Top of the page with plenty of readable content here.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Middle of the page continues with more readable content.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Bottom of the page finishes the note cleanly.' } }] });
+
+      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+
+      // One vision call per segment, no fallback.
+      expect(mockCreate).toHaveBeenCalledTimes(3);
+      expect(result?.modelUsed).toBe('gpt-4o');
+      expect(result?.text).toContain('Top of the page');
+      expect(result?.text).toContain('Middle of the page');
+      expect(result?.text).toContain('Bottom of the page');
+    });
+
+    it('triggers fallback when an INTERIOR segment returns no text', async () => {
+      mockCreate
+        // primary: segment 1 (interior) comes back empty → incomplete
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Top segment has readable content to keep quality high.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: '' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Bottom segment also has readable content present.' } }] })
+        // fallback: all three segments succeed
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback top segment recovered the text.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback middle segment recovered the missing band.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback bottom segment recovered the text.' } }] });
+
+      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+
+      // 3 primary + 3 fallback segment calls.
+      expect(mockCreate).toHaveBeenCalledTimes(6);
+      expect(result?.modelUsed).toContain('fallback from gpt-4o');
+      expect(result?.text).toContain('Fallback middle segment');
+    });
+
+    it('does NOT trigger fallback when only the FINAL segment is blank (trailing page space)', async () => {
+      mockCreate
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Top segment has readable content to keep quality high.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Middle segment continues with more readable content here.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: '' } }] });
+
+      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+
+      // Trailing blank strip is benign: no fallback, only the 3 primary calls.
+      expect(mockCreate).toHaveBeenCalledTimes(3);
+      expect(result?.modelUsed).toBe('gpt-4o');
+      expect(result?.text).toContain('Middle segment');
+    });
   });
 });

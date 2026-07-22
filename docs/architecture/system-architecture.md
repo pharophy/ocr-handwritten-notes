@@ -108,9 +108,26 @@ Set `AI_MODEL_OCR_FALLBACK=none` to disable fallback. Fallback models must be av
 Image handling is local before an AI API call:
 
 1. Load source image from disk.
-2. Normalize image format and orientation.
-3. Resize and compress when configured size limits require it.
-4. Encode the final image for the provider request.
+2. Normalize image format and orientation (grayscale, normalize, sharpen).
+3. Cap the image **width** only (preserving aspect ratio) so tall pages are never
+   squished horizontally into illegibility.
+4. Split tall pages into full-resolution overlapping vertical segments, OCR each
+   segment independently, and stitch the transcriptions back together.
+5. Compress each segment when configured size limits require it.
+6. Encode the final image(s) for the provider request.
+
+Tall-image segmentation avoids the hallucination that occurs when a very tall page
+is downsampled to fit a single request. Segments overlap so lines straddling a
+boundary are not clipped, and the overlap is de-duplicated during stitching. If an
+interior segment returns no text, the transcription is marked incomplete so the
+fallback model runs rather than silently dropping that region.
+
+Relevant constants (`src/ocr.ts`):
+
+```
+SEGMENT_MAX_HEIGHT = 2200   # max pixel height per OCR segment
+SEGMENT_OVERLAP    = 200    # vertical overlap between segments (px)
+```
 
 Relevant settings:
 
@@ -137,7 +154,10 @@ OCR_MIN_LENGTH_THRESHOLD=50
 OCR_MIN_IMAGE_SIZE=100000
 ```
 
-When quality is poor and `AI_MODEL_OCR_FALLBACK` is not `none`, the system retries OCR with the fallback model on the configured provider and returns the better result.
+When quality is poor — or when a segmented transcription is incomplete (an interior
+segment produced no text) — and `AI_MODEL_OCR_FALLBACK` is not `none`, the system
+retries OCR with the fallback model on the configured provider and returns the better
+result.
 
 ## Data Storage
 

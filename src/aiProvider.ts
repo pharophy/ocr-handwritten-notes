@@ -73,6 +73,15 @@ export interface AIProvider {
   getProviderConfig(): AIProviderConfig;
 }
 
+// Reasoning models (gpt-5*, gpt-4.1*) count hidden reasoning tokens against
+// max_completion_tokens. If the budget only covers the visible answer, reasoning can
+// consume it entirely and the response comes back with empty content
+// (finish_reason: 'length'). These budgets leave ample headroom for reasoning + output.
+const REASONING_MAX_COMPLETION_TOKENS = 16000;
+// Legacy (non-reasoning) models bill max_tokens against visible output only.
+const LEGACY_MAX_TOKENS_VISION = 5000;
+const LEGACY_MAX_TOKENS_TEXT = 4096;
+
 export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
   private config: AIProviderConfig;
@@ -99,8 +108,8 @@ export class OpenAIProvider implements AIProvider {
     const model = this.getModelForType(modelType);
     const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
     const tokenParams: any = isNewModel
-      ? { max_completion_tokens: 5000 }
-      : { max_tokens: 5000 };
+      ? { max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
+      : { max_tokens: LEGACY_MAX_TOKENS_VISION };
 
     const response = await this.client.chat.completions.create({
       model,
@@ -132,8 +141,8 @@ export class OpenAIProvider implements AIProvider {
     const model = this.getModelForType(modelType);
     const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
     const tokenParams: any = isNewModel
-      ? { max_completion_tokens: 4096 }
-      : { max_tokens: 4096 };
+      ? { max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
+      : { max_tokens: LEGACY_MAX_TOKENS_TEXT };
 
     const response = await this.client.chat.completions.create({
       model,
