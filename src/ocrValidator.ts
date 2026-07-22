@@ -3,14 +3,11 @@ import { loadHandwritingReference, loadAIProviderConfig, type HandwritingReferen
 import {
   compressImageIfNeeded,
   getCompressionConfig,
-  PREPROCESSING_WIDTH,
-  PREPROCESSING_HEIGHT,
-  PREPROCESSING_QUALITY,
-  PREPROCESSING_SHARPEN_SIGMA,
+  preprocessImageForOCR,
+  segmentImageVertically,
   CONFIDENCE_TO_PERCENT,
   PERCENT_WHOLE_NUMBER,
 } from './ocr';
-import sharp from 'sharp';
 
 export interface ValidationIssue {
   type: 'grammar' | 'semantics' | 'incomplete' | 'encoding';
@@ -597,48 +594,59 @@ function getIssueGuidance(issue: ValidationIssue, glossary: any): string {
 /**
  * Requests phrase correction via AI provider
  */
+const NOT_PRESENT_SENTINEL = 'NOT_PRESENT';
+
 async function requestPhraseCorrection(
   imageBuffer: Buffer,
   prompt: string
 ): Promise<string | null> {
   try {
-    // Preprocess and compress image (same pipeline as OCR to ensure <5MB)
-    const preprocessedBuffer = await sharp(imageBuffer)
-      .grayscale()
-      .resize({ width: PREPROCESSING_WIDTH, height: PREPROCESSING_HEIGHT, fit: 'inside' })
-      .normalize()
-      .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
-      .jpeg({ quality: PREPROCESSING_QUALITY })
-      .toBuffer();
+    // Use the same width-only preprocessing as the primary OCR path, then split tall
+    // pages into vertical strips. Sending a very tall page as a single image lets the
+    // model downsample it to illegibility and hallucinate a "correction"; strips keep
+    // the handwriting legible. See preprocessImageForOCR / segmentImageVertically.
+    const preprocessedBuffer = await preprocessImageForOCR(imageBuffer);
+    const segments = await segmentImageVertically(preprocessedBuffer);
 
-    // Apply compression if needed
     const compressionConfig = getCompressionConfig();
-    let finalBuffer = preprocessedBuffer;
-
-    if (compressionConfig.enabled) {
-      const compressionResult = await compressImageIfNeeded(
-        preprocessedBuffer,
-        compressionConfig.maxSizeBytes,
-        compressionConfig.minQuality
-      );
-      finalBuffer = compressionResult.buffer;
-    }
-
-    const base64Image = finalBuffer.toString('base64');
     const provider = await getProvider();
 
-    const systemPrompt = 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.';
+    // With multiple strips the phrase lives in only one of them, so each strip is told
+    // to report the sentinel when the phrase is not visible; we take the first strip
+    // that actually returns a correction.
+    const multiSegment = segments.length > 1;
+    const systemPrompt = multiSegment
+      ? `You are a handwriting OCR correction specialist. The image is one vertical section of a larger page. If the phrase to correct is NOT visible in this section, respond with exactly "${NOT_PRESENT_SENTINEL}" and nothing else. Otherwise provide only the corrected phrase, no explanation or additional text.`
+      : 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.';
     const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
-    const response = await provider.generateVisionCompletion(
-      fullPrompt,
-      base64Image,
-      'image/jpeg',
-      'ocr'
-    );
+    for (const segment of segments) {
+      let finalBuffer = segment;
+      if (compressionConfig.enabled) {
+        const compressionResult = await compressImageIfNeeded(
+          segment,
+          compressionConfig.maxSizeBytes,
+          compressionConfig.minQuality
+        );
+        finalBuffer = compressionResult.buffer;
+      }
 
-    const corrected = response.content?.trim();
-    return corrected || null;
+      const base64Image = finalBuffer.toString('base64');
+      const response = await provider.generateVisionCompletion(
+        fullPrompt,
+        base64Image,
+        'image/jpeg',
+        'ocr'
+      );
+
+      const corrected = response.content?.trim();
+      if (!corrected) continue;
+      // Guard against the sentinel leaking into the transcription as a "correction".
+      if (multiSegment && /^NOT_PRESENT\b/i.test(corrected)) continue;
+      return corrected;
+    }
+
+    return null;
   } catch (error: any) {
     console.error('❌ Correction API call failed:', error.message);
     return null;

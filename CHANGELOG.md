@@ -20,13 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - OCR preprocessing now caps image width only (preserving aspect ratio) instead of
   forcing both width and height into a bounding box, which previously squished tall
-  pages horizontally
+  pages horizontally. Extracted as a shared `preprocessImageForOCR` helper used by both
+  the primary OCR path and the phrase-correction path so they can't drift apart
+- Phrase correction now runs on the same width-only, vertically-segmented imagery as
+  primary OCR (each strip queried with a `NOT_PRESENT` guard to locate the phrase)
+  instead of re-reading a downsampled full page
 - Reasoning models (`gpt-5*`, `gpt-4.1*`) now request up to 16000 completion tokens
   so hidden reasoning tokens no longer exhaust the budget and leave empty output
 
 ### Fixed
 - Hallucinated OCR output on very tall images (e.g. long stitched note scans) caused
-  by horizontal squishing before the vision call
+  by horizontal squishing before the vision call, in both the primary OCR path and the
+  phrase-correction pass (the latter previously still downsampled the full page)
 - Empty summaries from reasoning models when reasoning tokens consumed the entire
   `max_completion_tokens` budget
 

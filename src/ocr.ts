@@ -18,8 +18,7 @@ import {
 // ============================================================================
 
 // Image preprocessing constants (exported for use in validation pipeline)
-export const PREPROCESSING_WIDTH = 1600;           // Max width for preprocessed images
-export const PREPROCESSING_HEIGHT = 7000;          // Max height for preprocessed images
+export const PREPROCESSING_WIDTH = 1600;           // Max width for preprocessed images (height is uncapped; tall pages are segmented instead)
 export const PREPROCESSING_QUALITY = 95;           // Initial JPEG quality before compression
 export const PREPROCESSING_SHARPEN_SIGMA = 1.0;    // Sharpening intensity
 
@@ -325,6 +324,25 @@ export function condenseBulletLines(text: string): string {
 }
 
 /**
+ * Preprocess a source image for OCR.
+ *
+ * Caps the WIDTH only (preserving aspect ratio, never enlarging) so tall pages are
+ * never squished or downsampled to illegibility to fit a height box. Height is handled
+ * downstream by vertical segmentation, which keeps handwriting at full resolution.
+ * Shared by the primary OCR path and the correction path so both send the model the
+ * same, legible imagery.
+ */
+export async function preprocessImageForOCR(imageBuffer: Buffer): Promise<Buffer> {
+  return sharp(imageBuffer)
+    .grayscale()
+    .resize({ width: PREPROCESSING_WIDTH, fit: 'inside', withoutEnlargement: true })
+    .normalize()
+    .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
+    .jpeg({ quality: PREPROCESSING_QUALITY })  // High quality initial conversion, compression will reduce if needed
+    .toBuffer();
+}
+
+/**
  * Split a (preprocessed) image into full-resolution vertical segments.
  *
  * Segments overlap by `overlap` pixels so a line of text straddling a boundary
@@ -524,17 +542,8 @@ export async function processHandwrittenImage(imageBuffer: Buffer, filename: str
       referenceLoaded = true;
     }
 
-    // Preprocess the image using sharp.
-    // Cap the WIDTH only (preserving aspect ratio) so tall pages are never squished
-    // horizontally. Height is handled later by vertical segmentation, which keeps the
-    // handwriting at full resolution instead of downsampling it to illegibility.
-    const preprocessedBuffer = await sharp(imageBuffer)
-      .grayscale()
-      .resize({ width: PREPROCESSING_WIDTH, fit: 'inside', withoutEnlargement: true })
-      .normalize()
-      .sharpen({ sigma: PREPROCESSING_SHARPEN_SIGMA })
-      .jpeg({ quality: PREPROCESSING_QUALITY })  // High quality initial conversion, compression will reduce if needed
-      .toBuffer();
+    // Preprocess the image (width-only cap; tall pages are segmented downstream).
+    const preprocessedBuffer = await preprocessImageForOCR(imageBuffer);
 
     // Get domain glossary from cached reference
     const glossary = getDomainGlossary(cachedReference || {});
