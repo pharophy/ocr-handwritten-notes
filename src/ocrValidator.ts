@@ -624,10 +624,10 @@ async function requestPhraseCorrection(
     const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
     for (const segment of segments) {
-      let finalBuffer = segment;
+      let finalBuffer = segment.buffer;
       if (compressionConfig.enabled) {
         const compressionResult = await compressImageIfNeeded(
-          segment,
+          segment.buffer,
           compressionConfig.maxSizeBytes,
           compressionConfig.minQuality
         );
