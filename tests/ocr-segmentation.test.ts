@@ -31,7 +31,8 @@ describe('Tall-image vertical segmentation', () => {
     const image = await makeImage(1600, SEGMENT_MAX_HEIGHT - 100);
     const segments = await segmentImageVertically(image);
     expect(segments).toHaveLength(1);
-    expect(segments[0]).toBe(image);
+    expect(segments[0].buffer).toBe(image);
+    expect(segments[0].height).toBe(SEGMENT_MAX_HEIGHT - 100);
   });
 
   it('does not segment an image exactly at the max height', async () => {
@@ -54,11 +55,13 @@ describe('Tall-image vertical segmentation', () => {
     expect(segments.length).toBe(expected);
     expect(segments.length).toBeGreaterThan(1);
 
-    // Every segment keeps full width and is no taller than the cap.
+    // Every segment keeps full width and is no taller than the cap, and the
+    // reported height matches the actual decoded pixel height.
     for (const segment of segments) {
-      const meta = await sharp(segment).metadata();
+      const meta = await sharp(segment.buffer).metadata();
       expect(meta.width).toBe(width);
       expect(meta.height).toBeLessThanOrEqual(SEGMENT_MAX_HEIGHT);
+      expect(segment.height).toBe(meta.height);
     }
 
     // Segments must cover the whole page (accounting for overlap).
@@ -71,8 +74,9 @@ describe('Tall-image vertical segmentation', () => {
     const segments = await segmentImageVertically(image);
     expect(segments.length).toBeGreaterThan(1);
 
-    const firstHeight = await heightOf(segments[0]);
+    const firstHeight = await heightOf(segments[0].buffer);
     expect(firstHeight).toBe(SEGMENT_MAX_HEIGHT);
+    expect(segments[0].height).toBe(SEGMENT_MAX_HEIGHT);
   });
 });
 

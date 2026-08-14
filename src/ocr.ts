@@ -29,6 +29,12 @@ export const PREPROCESSING_SHARPEN_SIGMA = 1.0;    // Sharpening intensity
 // OCR each, and stitch the results back together.
 export const SEGMENT_MAX_HEIGHT = 2200;            // Max pixel height per OCR segment
 export const SEGMENT_OVERLAP = 200;                // Vertical overlap between segments (px) so lines aren't clipped at boundaries
+// A non-final segment whose text density (chars per pixel of height) falls below this
+// fraction of the median density of the other non-empty segments is treated as an
+// under-transcribed (silently dropped) segment. Conservative by default: a genuinely
+// dropped segment returns a tiny fraction of its neighbors' density, while normal
+// page-to-page variation stays well above this floor. Override with OCR_SEGMENT_MIN_DENSITY_RATIO.
+export const SEGMENT_MIN_DENSITY_RATIO = 0.25;
 
 // Compression quality levels (progressive reduction)
 export const COMPRESSION_QUALITY_HIGH = 90;        // First attempt
@@ -343,27 +349,37 @@ export async function preprocessImageForOCR(imageBuffer: Buffer): Promise<Buffer
 }
 
 /**
+ * A vertical strip of a segmented page: the cropped JPEG plus its known pixel
+ * height (authoritative at cut time, so downstream never re-decodes to recover it).
+ */
+export interface ImageSegment {
+  buffer: Buffer;
+  height: number;
+}
+
+/**
  * Split a (preprocessed) image into full-resolution vertical segments.
  *
  * Segments overlap by `overlap` pixels so a line of text straddling a boundary
  * appears intact in at least one segment. Returns a single-element array when the
- * image is short enough to OCR in one pass.
+ * image is short enough to OCR in one pass. Each element carries its pixel height
+ * so callers (e.g. the density check) need not re-decode the buffer.
  */
 export async function segmentImageVertically(
   buffer: Buffer,
   maxHeight: number = SEGMENT_MAX_HEIGHT,
   overlap: number = SEGMENT_OVERLAP
-): Promise<Buffer[]> {
+): Promise<ImageSegment[]> {
   const meta = await sharp(buffer).metadata();
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
 
   if (!width || !height || height <= maxHeight) {
-    return [buffer];
+    return [{ buffer, height }];
   }
 
   const step = Math.max(1, maxHeight - overlap);
-  const segments: Buffer[] = [];
+  const segments: ImageSegment[] = [];
 
   for (let top = 0; top < height; top += step) {
     const segHeight = Math.min(maxHeight, height - top);
@@ -373,7 +389,7 @@ export async function segmentImageVertically(
       .extract({ left: 0, top, width, height: segHeight })
       .jpeg({ quality: PREPROCESSING_QUALITY })
       .toBuffer();
-    segments.push(segment);
+    segments.push({ buffer: segment, height: segHeight });
 
     if (top + segHeight >= height) break;
   }
@@ -459,6 +475,81 @@ export function findEmptySegments(parts: string[]): { emptyIndices: number[]; in
 }
 
 /**
+ * Inspect per-segment transcriptions for a segment that returned far *less* text
+ * than its image area implies — a silent partial-transcription drop that
+ * `findEmptySegments` misses because the segment is not fully empty.
+ *
+ * The stitch step can only remove a leading overlap, never a segment's interior,
+ * so a segment that transcribes only a fraction of its band silently loses that
+ * content. We detect it by text density: for each non-empty segment, density =
+ * trimmed chars / segment pixel height. A non-final segment whose density is below
+ * `minDensityRatio` of the median density of the other non-empty segments is
+ * flagged as under-filled.
+ *
+ * Interior/leading only mirrors `findEmptySegments`: a short *final* segment is
+ * usually trailing blank page space and is never treated as under-transcribed.
+ * Requires at least two non-empty segments to have a reference to compare against.
+ *
+ * The reference for each candidate is the median of the *other* non-empty
+ * segments (leave-one-out): a candidate must not dilute the very baseline it is
+ * measured against, otherwise the more content that is dropped, the lower the
+ * baseline falls and the less likely a genuine drop is flagged.
+ */
+export function findUnderfilledSegments(
+  parts: string[],
+  segmentHeights: number[],
+  minDensityRatio: number = parseFloat(
+    process.env.OCR_SEGMENT_MIN_DENSITY_RATIO || String(SEGMENT_MIN_DENSITY_RATIO)
+  )
+): { underfilledIndices: number[]; incomplete: boolean } {
+  // A malformed override (parseFloat → NaN, non-positive, or ≥ 1) must not skew
+  // detection: ≤ 0 / NaN would disable it, ≥ 1 would flag nearly every segment.
+  // Only a fraction in (0, 1) is meaningful; otherwise fall back to the default.
+  const ratio = Number.isFinite(minDensityRatio) && minDensityRatio > 0 && minDensityRatio < 1
+    ? minDensityRatio
+    : SEGMENT_MIN_DENSITY_RATIO;
+
+  // Density per segment, only for segments that have both text and a known height.
+  const densities = parts.map((part, i) => {
+    const len = part.trim().length;
+    const height = segmentHeights[i] ?? 0;
+    return len > 0 && height > 0 ? len / height : null;
+  });
+
+  const knownIndices = densities.flatMap((d, i) => (d !== null ? [i] : []));
+  if (knownIndices.length < 2) {
+    return { underfilledIndices: [], incomplete: false };
+  }
+
+  // Exempt the last *content-bearing* segment, not the last array index: a
+  // trailing blank strip must not strip the exemption from a genuinely sparse
+  // bottom band (which would be a spurious under-fill flag).
+  const lastContentIndex = knownIndices[knownIndices.length - 1];
+
+  const underfilledIndices: number[] = [];
+  for (const i of knownIndices) {
+    // Leave-one-out: compare this segment against the median of the others.
+    const others = knownIndices.filter(j => j !== i).map(j => densities[j] as number);
+    const reference = median(others);
+    if (reference > 0 && (densities[i] as number) < reference * ratio) {
+      underfilledIndices.push(i);
+    }
+  }
+
+  const incomplete = underfilledIndices.some(i => i !== lastContentIndex);
+  return { underfilledIndices, incomplete };
+}
+
+/** Median of a non-empty list of numbers. */
+function median(nums: number[]): number {
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+/**
  * Transcribe a preprocessed image with the given provider, segmenting tall images
  * into vertical strips so nothing is lost to downsampling. Returns an AIResponse-like
  * object so callers can treat single- and multi-segment paths uniformly.
@@ -481,7 +572,7 @@ async function transcribeImage(
   let model = '';
 
   for (let i = 0; i < segments.length; i++) {
-    let segmentBuffer = segments[i];
+    let segmentBuffer = segments[i].buffer;
 
     if (compressionConfig.enabled) {
       const compressionResult = await compressImageIfNeeded(
@@ -509,15 +600,31 @@ async function transcribeImage(
 
   // A single-segment image that comes back empty is handled by the caller's
   // existing empty-content check, so only multi-segment runs are inspected for
-  // an interior segment that dropped out.
-  const { emptyIndices, incomplete } = findEmptySegments(parts);
+  // a segment that dropped out — either fully empty, or under-transcribed
+  // (returned far less text than its image area implies).
+  const { emptyIndices, incomplete: hasEmpty } = findEmptySegments(parts);
   if (emptyIndices.length > 0) {
     console.log(
       `⚠️  ${emptyIndices.length}/${segments.length} segment(s) returned no text (indices: ${emptyIndices.join(', ')})` +
-      (incomplete ? ' — marking transcription incomplete so fallback can run' : '')
+      (hasEmpty ? ' — marking transcription incomplete so fallback can run' : '')
     );
   }
 
+  let hasUnderfilled = false;
+  if (segments.length > 1) {
+    // Heights are known from segmentation — no need to re-decode each buffer.
+    const segmentHeights = segments.map(seg => seg.height);
+    const { underfilledIndices, incomplete } = findUnderfilledSegments(parts, segmentHeights);
+    hasUnderfilled = incomplete;
+    if (underfilledIndices.length > 0) {
+      console.log(
+        `⚠️  ${underfilledIndices.length}/${segments.length} segment(s) returned far less text than their area implies (indices: ${underfilledIndices.join(', ')})` +
+        (incomplete ? ' — marking transcription incomplete so fallback can run' : '')
+      );
+    }
+  }
+
+  const incomplete = hasEmpty || hasUnderfilled;
   return { content: stitchSegmentTranscriptions(parts), model, incomplete };
 }
 
@@ -634,8 +741,14 @@ Output only the transcribed text, no explanation.
           isPoorQuality: fallbackQuality.isPoorQuality,
         });
 
-        if (fallbackQuality.isPoorQuality) {
-          console.log(`⚠️  Both models produced poor quality, returning fallback result`);
+        // Surface the fallback's OWN completeness signal too: if the fallback
+        // model also dropped a segment there is no third model to try, so we
+        // still return its output — but it must not pass silently.
+        if (fallbackQuality.isPoorQuality || fallbackResponse.incomplete) {
+          const reason = fallbackResponse.incomplete
+            ? 'fallback transcription still appears incomplete (a segment was dropped or under-transcribed)'
+            : 'both models produced poor quality';
+          console.log(`⚠️  ${reason}, returning fallback result`);
         }
 
         // Always return fallback result when fallback was triggered

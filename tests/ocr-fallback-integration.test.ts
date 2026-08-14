@@ -173,6 +173,31 @@ describe('OCR Fallback Integration Tests', () => {
       expect(result?.text).toContain('Fallback middle segment');
     });
 
+    it('triggers fallback when an interior segment is UNDER-TRANSCRIBED (non-empty but sparse)', async () => {
+      // The middle segment returns a tiny fragment for a full-height band — not
+      // empty (so findEmptySegments would miss it), but far below its neighbors'
+      // density. This exercises the whole wiring: segmentation heights → density
+      // check → incomplete → fallback gate. No illegible markers and ample total
+      // length, so isPoorQuality stays false and under-fill is the ONLY trigger.
+      const denseTop = 'This top band is full of readable handwriting with many words across the whole strip. '.repeat(3);
+      const denseBottom = 'This bottom band is likewise full of readable handwriting across its whole height here. '.repeat(3);
+      mockCreate
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: denseTop } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'ok' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: denseBottom } }] })
+        // fallback: all three segments recovered
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback top segment recovered the text.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback middle segment recovered the under-transcribed band.' } }] })
+        .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback bottom segment recovered the text.' } }] });
+
+      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+
+      // 3 primary + 3 fallback segment calls: the sparse interior segment tripped the density check.
+      expect(mockCreate).toHaveBeenCalledTimes(6);
+      expect(result?.modelUsed).toContain('fallback from gpt-4o');
+      expect(result?.text).toContain('Fallback middle segment');
+    });
+
     it('does NOT trigger fallback when only the FINAL segment is blank (trailing page space)', async () => {
       mockCreate
         .mockResolvedValueOnce({ model: 'gpt-4o', choices: [{ message: { content: 'Top segment has readable content to keep quality high.' } }] })
