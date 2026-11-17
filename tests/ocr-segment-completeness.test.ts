@@ -1,4 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
+// These regressions document the original 2200px/200px segmentation and the legacy
+// peer-density check (findUnderfilledSegments), which is kept for when ink coverage
+// is unavailable. fix-ocr-fidelity changed the default geometry to 768/150, so the
+// original geometry is pinned here via env.
+const savedGeometry = { h: process.env.OCR_SEGMENT_MAX_HEIGHT, o: process.env.OCR_SEGMENT_OVERLAP };
+beforeAll(() => {
+  process.env.OCR_SEGMENT_MAX_HEIGHT = '2200';
+  process.env.OCR_SEGMENT_OVERLAP = '200';
+});
+afterAll(() => {
+  if (savedGeometry.h === undefined) delete process.env.OCR_SEGMENT_MAX_HEIGHT; else process.env.OCR_SEGMENT_MAX_HEIGHT = savedGeometry.h;
+  if (savedGeometry.o === undefined) delete process.env.OCR_SEGMENT_OVERLAP; else process.env.OCR_SEGMENT_OVERLAP = savedGeometry.o;
+});
 import sharp from 'sharp';
 import {
   segmentImageVertically,
@@ -53,10 +67,9 @@ describe('Segmented tall-image regression: silent mid-page drop', () => {
     expect(segments).toHaveLength(3);
 
     const heights = await heightsOf(segments);
-    // Two full-height bands and a short trailing sliver — the real geometry.
-    expect(heights[0]).toBeGreaterThan(2000);
-    expect(heights[1]).toBeGreaterThan(2000);
-    expect(heights[2]).toBeLessThan(1000);
+    // Three full-height bands: the last one is anchored to the page bottom
+    // (overlapping more) rather than being the short trailing sliver it used to be.
+    expect(heights).toEqual([2200, 2200, 2200]);
   });
 
   it('the OLD empty-only check does NOT catch an under-filled interior segment (captures the bug)', async () => {
@@ -90,12 +103,8 @@ describe('findUnderfilledSegments guardrails (no false positives)', () => {
   it('does not flag segments whose text is roughly proportional to their area', async () => {
     const image = await makeImage(CAPTURE_WIDTH, CAPTURE_HEIGHT);
     const heights = await heightsOf(await segmentImageVertically(image));
-    // Proportional: the short trailing segment gets proportionally less text.
-    const parts = [
-      densePage('page1'),
-      densePage('page2'),
-      Array.from({ length: 6 }, (_, i) => `- tail line ${i + 1}`).join('\n'),
-    ];
+    // Proportional: every (full-height) segment gets a full band of text.
+    const parts = [densePage('page1'), densePage('page2'), densePage('page3')];
     const result = findUnderfilledSegments(parts, heights);
     expect(result.underfilledIndices).toEqual([]);
     expect(result.incomplete).toBe(false);

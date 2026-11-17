@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { processHandwrittenImage, resetOCRCacheForTests } from '../src/ocr';
+import { syntheticPage } from './helpers/syntheticPage';
 
 vi.mock('openai', () => {
   const mockCreate = vi.fn();
@@ -42,6 +43,12 @@ async function testImage(): Promise<Buffer> {
   return sharp({
     create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 255, b: 255 } }
   }).jpeg().toBuffer();
+}
+
+// Same geometry with drawn "handwriting", so every segment has ink (blank paper
+// is expected to be empty and is not treated as a dropped band).
+async function inkedTallImage(): Promise<Buffer> {
+  return syntheticPage(1000, 5000);
 }
 
 // Tall enough to be split into multiple vertical OCR segments (> SEGMENT_MAX_HEIGHT).
@@ -137,6 +144,18 @@ describe('OCR Fallback Integration Tests', () => {
   });
 
   describe('tall-image segmentation', () => {
+    // Pinned to the original 2200/200 geometry (3 segments for 1000x5000); the
+    // 768/150 default is covered in ocr-segment-completeness-ink.test.ts.
+    const savedGeometry = { h: process.env.OCR_SEGMENT_MAX_HEIGHT, o: process.env.OCR_SEGMENT_OVERLAP };
+    beforeEach(() => {
+      process.env.OCR_SEGMENT_MAX_HEIGHT = '2200';
+      process.env.OCR_SEGMENT_OVERLAP = '200';
+    });
+    afterEach(() => {
+      if (savedGeometry.h === undefined) delete process.env.OCR_SEGMENT_MAX_HEIGHT; else process.env.OCR_SEGMENT_MAX_HEIGHT = savedGeometry.h;
+      if (savedGeometry.o === undefined) delete process.env.OCR_SEGMENT_OVERLAP; else process.env.OCR_SEGMENT_OVERLAP = savedGeometry.o;
+    });
+
     it('OCRs a tall image as multiple segments and stitches them without fallback', async () => {
       // 1000x5000 preprocessed image → 3 vertical segments.
       mockCreate
@@ -165,7 +184,7 @@ describe('OCR Fallback Integration Tests', () => {
         .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback middle segment recovered the missing band.' } }] })
         .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback bottom segment recovered the text.' } }] });
 
-      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+      const result = await processHandwrittenImage(await inkedTallImage(), 'tall-note.jpg');
 
       // 3 primary + 3 fallback segment calls.
       expect(mockCreate).toHaveBeenCalledTimes(6);
@@ -190,7 +209,7 @@ describe('OCR Fallback Integration Tests', () => {
         .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback middle segment recovered the under-transcribed band.' } }] })
         .mockResolvedValueOnce({ model: 'gpt-4.1-mini', choices: [{ message: { content: 'Fallback bottom segment recovered the text.' } }] });
 
-      const result = await processHandwrittenImage(await tallImage(), 'tall-note.jpg');
+      const result = await processHandwrittenImage(await inkedTallImage(), 'tall-note.jpg');
 
       // 3 primary + 3 fallback segment calls: the sparse interior segment tripped the density check.
       expect(mockCreate).toHaveBeenCalledTimes(6);

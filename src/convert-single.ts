@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import path from 'path';
-import { processHandwrittenImage, CONFIDENCE_TO_PERCENT, PERCENT_WHOLE_NUMBER } from './ocr';
-import { summarizeText } from './summarize';
-import { validateOCROutput, formatValidationReport, correctOCRIssues, getCorrectionConfig, type ValidationReport } from './ocrValidator';
+import dotenv from 'dotenv';
+import { CONFIDENCE_TO_PERCENT, PERCENT_WHOLE_NUMBER } from './ocr';
+import { processImageFile } from './pipeline';
+
+dotenv.config();
 
 /**
  * Convert a single image file to OCR and optionally summarize
@@ -64,109 +66,35 @@ Examples:
   console.log('');
 
   try {
-    // Read the image
-    const imageBuffer = await fs.readFile(imagePath);
+    // Same pipeline as the batch run (src/pipeline.ts), so output files are identical.
+    const result = await processImageFile(imagePath, {
+      validation: shouldValidate ? 'on' : 'off',
+      correction: shouldCorrect,
+      summarize: !skipSummary,
+    });
 
-    // Perform OCR
-    console.log('🔍 Running OCR...');
-    const ocrResult = await processHandwrittenImage(imageBuffer, path.basename(imagePath));
-
-    if (!ocrResult) {
+    if (!result) {
       console.error('❌ OCR failed - no transcription returned');
       process.exit(1);
     }
 
-    const { text: transcription, modelUsed } = ocrResult;
-
-    // Optional validation
-    let validationReport: ValidationReport | null = null;
-    let finalTranscription = transcription;
-
-    if (shouldValidate) {
-      console.log('🔍 Validating OCR quality...');
-      validationReport = await validateOCROutput(transcription);
-
-      console.log(`📊 Quality Score: ${(validationReport.overallConfidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%`);
-
-      if (validationReport.issueCount.critical > 0) {
-        console.log(`⚠️  Found ${validationReport.issueCount.critical} critical issues`);
-      }
-
-      if (validationReport.recommendation === 'manual-transcribe') {
+    if (result.validationReport) {
+      const report = result.validationReport;
+      console.log(`📊 Quality Score: ${(report.overallConfidence * CONFIDENCE_TO_PERCENT).toFixed(PERCENT_WHOLE_NUMBER)}%`);
+      if (report.recommendation === 'manual-transcribe') {
         console.log('❌ Recommendation: Consider manual re-transcription');
-      } else if (validationReport.recommendation === 'review') {
+      } else if (report.recommendation === 'review') {
         console.log('⚠️  Recommendation: Review flagged issues');
       } else {
         console.log('✅ Recommendation: Quality acceptable, proceed');
       }
-      console.log('');
     }
 
-    // Optional multi-pass correction
-    if (shouldCorrect && validationReport?.hasIssues) {
-      console.log('🔧 Applying multi-pass corrections...');
-
-      const correctionConfig = await getCorrectionConfig();
-      const correctionResult = await correctOCRIssues(
-        finalTranscription,
-        imageBuffer,
-        validationReport,
-        correctionConfig
-      );
-
-      finalTranscription = correctionResult.correctedText;
-
-      if (correctionResult.correctionCount > 0) {
-        console.log(`✅ Applied ${correctionResult.correctionCount} corrections:`);
-        correctionResult.corrections.forEach((c, i) => {
-          console.log(`  ${i + 1}. "${c.originalPhrase}" → "${c.correctedPhrase}"`);
-        });
-
-        // Append correction log to validation report
-        if (validationReport) {
-          validationReport.correctionLog = correctionResult.corrections;
-        }
-      } else {
-        console.log('ℹ️  No corrections applied');
-      }
-      console.log('');
-    }
-
-    // Prepare output paths
-    const folder = path.dirname(imagePath);
-    const baseName = path.basename(imagePath, path.extname(imagePath));
-    const ocrOutputPath = path.join(folder, `${baseName}.md`);
-    const summaryOutputPath = path.join(folder, `${baseName} - Summary and Actions.md`);
-
-    // Write OCR output with optional validation report
-    const summaryLink = skipSummary ? '' : `[[${baseName} - Summary and Actions.md]] | `;
-    let ocrContent = `${summaryLink}[[${path.basename(imagePath)}]]\n\`\`\`markdown\n${finalTranscription}\n\`\`\``;
-
-    if (validationReport?.hasIssues) {
-      ocrContent += '\n\n---\n\n## OCR Validation Report\n\n';
-      ocrContent += `**Model Used**: ${modelUsed}\n\n`;
-      ocrContent += formatValidationReport(validationReport);
-    }
-
-    await fs.writeFile(ocrOutputPath, ocrContent);
-    console.log(`✅ OCR output: ${ocrOutputPath}`);
-
-    // Generate summary if not skipped and quality acceptable
-    const qualityTooLow = validationReport && validationReport.overallConfidence < 0.5;
-
-    if (!skipSummary && !qualityTooLow) {
-      console.log('📝 Generating summary...');
-      const summary = await summarizeText(transcription);
-
-      if (summary && summary !== 'no summary') {
-        const summaryContent = `[[${baseName}.md]] | [[${path.basename(imagePath)}]]\n${summary}`;
-        await fs.writeFile(summaryOutputPath, summaryContent);
-        console.log(`✅ Summary output: ${summaryOutputPath}`);
-      } else {
-        console.log('⚠️  Summary generation skipped (no content or error)');
-      }
-    } else if (qualityTooLow) {
-      console.log('⏭ Skipping summarization (OCR quality too low)');
+    console.log(`✅ OCR output: ${result.ocrPath}`);
+    if (result.summaryPath) {
+      console.log(`✅ Summary output: ${result.summaryPath}`);
+    } else if (!skipSummary) {
+      console.log('⚠️  Summary not written (no content, error, or OCR quality too low)');
     }
 
     console.log('');
