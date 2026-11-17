@@ -55,12 +55,26 @@ export interface AIProviderConfig {
   models?: ModelMapping;
 }
 
+/** An additional image sent before the target image (e.g. a handwriting reference). */
+export interface VisionImage {
+  base64: string;
+  mimeType: string;
+}
+
+export interface VisionOptions {
+  /** Images sent before the target image, in order. */
+  extraImages?: VisionImage[];
+  /** Image detail level. Honored by OpenAI; ignored by providers without the setting. */
+  detail?: 'low' | 'high' | 'auto';
+}
+
 export interface AIProvider {
   generateVisionCompletion(
     prompt: string,
     imageBase64: string,
     mimeType: string,
-    modelType: ModelType
+    modelType: ModelType,
+    options?: VisionOptions
   ): Promise<AIResponse>;
 
   generateTextCompletion(
@@ -73,7 +87,24 @@ export interface AIProvider {
   getProviderConfig(): AIProviderConfig;
 }
 
-// Reasoning models (gpt-5*, gpt-4.1*) count hidden reasoning tokens against
+/** Models that take max_completion_tokens (gpt-4.1, gpt-5 and later, o-series). */
+export function usesCompletionTokenBudget(model: string): boolean {
+  return /^gpt-(4\.1|[5-9])/.test(model) || /^o\d/.test(model);
+}
+
+/** Reasoning models that accept reasoning_effort (gpt-5 and later, o-series). */
+export function supportsReasoningEffort(model: string): boolean {
+  return /^gpt-[5-9]/.test(model) || /^o\d/.test(model);
+}
+
+/** Optional OCR_REASONING_EFFORT (minimal | low | medium | high) for OCR vision calls. */
+function ocrReasoningEffort(model: string, modelType: ModelType): string | undefined {
+  const effort = process.env.OCR_REASONING_EFFORT;
+  if (modelType !== 'ocr' || !effort || !supportsReasoningEffort(model)) return undefined;
+  return ['minimal', 'low', 'medium', 'high'].includes(effort) ? effort : undefined;
+}
+
+// Reasoning models (gpt-5+, gpt-4.1*) count hidden reasoning tokens against
 // max_completion_tokens. If the budget only covers the visible answer, reasoning can
 // consume it entirely and the response comes back with empty content
 // (finish_reason: 'length'). These budgets leave ample headroom for reasoning + output.
@@ -103,10 +134,21 @@ export class OpenAIProvider implements AIProvider {
     prompt: string,
     imageBase64: string,
     mimeType: string,
-    modelType: ModelType
+    modelType: ModelType,
+    options?: VisionOptions
   ): Promise<AIResponse> {
     const model = this.getModelForType(modelType);
-    const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
+    const isNewModel = usesCompletionTokenBudget(model);
+    const imagePart = (data: string, mime: string) => ({
+      type: 'image_url' as const,
+      image_url: options?.detail
+        ? { url: `data:${mime};base64,${data}`, detail: options.detail }
+        : { url: `data:${mime};base64,${data}` },
+    });
+    const images = [
+      ...(options?.extraImages ?? []).map(img => imagePart(img.base64, img.mimeType)),
+      imagePart(imageBase64, mimeType),
+    ];
     const tokenParams: any = isNewModel
       ? { max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
       : { max_tokens: LEGACY_MAX_TOKENS_VISION };
@@ -118,12 +160,7 @@ export class OpenAIProvider implements AIProvider {
         {
           role: 'user',
           content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${imageBase64}`,
-              },
-            },
+            ...images,
             {
               type: 'text',
               text: prompt,
@@ -132,6 +169,7 @@ export class OpenAIProvider implements AIProvider {
         },
       ],
       ...tokenParams,
+      ...(ocrReasoningEffort(model, modelType) ? { reasoning_effort: ocrReasoningEffort(model, modelType) } : {}),
     });
 
     return this.normalizeResponse(response);
@@ -139,7 +177,7 @@ export class OpenAIProvider implements AIProvider {
 
   async generateTextCompletion(prompt: string, modelType: ModelType): Promise<AIResponse> {
     const model = this.getModelForType(modelType);
-    const isNewModel = model.startsWith('gpt-5') || model.startsWith('gpt-4.1');
+    const isNewModel = usesCompletionTokenBudget(model);
     const tokenParams: any = isNewModel
       ? { max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS }
       : { max_tokens: LEGACY_MAX_TOKENS_TEXT };
@@ -199,10 +237,23 @@ export class AnthropicProvider implements AIProvider {
     prompt: string,
     imageBase64: string,
     mimeType: string,
-    modelType: ModelType
+    modelType: ModelType,
+    options?: VisionOptions
   ): Promise<AIResponse> {
     const model = this.getModelForType(modelType);
-    const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/jpeg';
+    // Anthropic has no per-image detail setting; options.detail is ignored.
+    const imageBlock = (data: string, mime: string) => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: (mime.startsWith('image/') ? mime : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+        data,
+      },
+    });
+    const images = [
+      ...(options?.extraImages ?? []).map(img => imageBlock(img.base64, img.mimeType)),
+      imageBlock(imageBase64, mimeType),
+    ];
 
     const response = await this.client.messages.create({
       model,
@@ -211,14 +262,7 @@ export class AnthropicProvider implements AIProvider {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                data: imageBase64,
-              },
-            },
+            ...images,
             {
               type: 'text',
               text: prompt,

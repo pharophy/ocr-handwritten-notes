@@ -114,7 +114,8 @@ describe('OCR Processing Specifications', () => {
 
       const result = await processHandwrittenImage(testImage, 'test.jpg');
 
-      expect(getPromptFromOpenAICall()).toContain('Do not use *italics*');
+      // fix-ocr-fidelity: the prompt asks for *italics* on unclear words (it used to forbid them).
+      expect(getPromptFromOpenAICall()).toContain('Wrap any word you cannot read confidently in *italics*');
       expect(result?.text).toContain('*unclear*');
     });
 
@@ -145,7 +146,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      expect(getPromptFromOpenAICall()).toContain('Preserve layout');
+      expect(getPromptFromOpenAICall()).toContain('Preserve the layout');
     });
 
     it('Scenario: Freeform notes layout - should preserve indentation and bullets', async () => {
@@ -159,7 +160,7 @@ describe('OCR Processing Specifications', () => {
 
       await processHandwrittenImage(testImage, 'test.jpg');
 
-      expect(getPromptFromOpenAICall()).toContain('Preserve layout');
+      expect(getPromptFromOpenAICall()).toContain('Preserve the layout');
     });
   });
 

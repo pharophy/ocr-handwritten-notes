@@ -14,7 +14,9 @@
     "test-ocr-suite": "node ./node_modules/tsx/dist/cli.mjs src/cli/testOCRSuite.ts",
     "experiment-ocr": "node ./node_modules/tsx/dist/cli.mjs src/cli/experimentOCR.ts",
     "advanced-experiment": "node ./node_modules/tsx/dist/cli.mjs src/cli/advancedExperiment.ts",
-    "generate-experiment-summary": "node scripts/generateExperimentSummary.js"
+    "generate-experiment-summary": "node scripts/generateExperimentSummary.js",
+    "eval:fidelity": "node ./node_modules/tsx/dist/cli.mjs src/cli/evalFidelity.ts",
+    "eval:crops": "node ./node_modules/tsx/dist/cli.mjs src/cli/evalCrops.ts"
   },
   "devDependencies": {
     "@vitest/ui": "^4.1.2",

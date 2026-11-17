@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`2.16 correction modes > legacy (unset) mode keeps today’s prompt and output > legacy-correction-output 1`] = `
+"- intro line
+- placeholder fixed words[corrected] here
+- outro line"
+`;
+
+exports[`2.16 correction modes > legacy (unset) mode keeps today’s prompt and output > legacy-correction-prompt 1`] = `
+"You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.
+
+Previous transcription: "placeholder broken words"
+Validation: grammatically incorrect
+
+Common grammar issues to check:
+- Missing words (articles, pronouns, verbs)
+- Wrong verb forms
+- Word order problems
+- Parallel structure breaks
+
+Context:
+- intro line
+- placeholder broken words here
+- outro line
+
+Validation suggests: possibly "placeholder fixed words"
+Known acronyms: ABC
+Known names: Placeholder Name
+Common handwriting confusions: h/b, s/g, m/n, rn/m, u/v
+
+Look at the handwriting carefully. Provide only the corrected phrase, no explanation."
+`;

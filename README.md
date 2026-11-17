@@ -102,6 +102,36 @@ OCR_MIN_LENGTH_THRESHOLD=50
 OCR_MIN_IMAGE_SIZE=100000
 ```
 
+## Tall Pages and Completeness
+
+Tall images (long notes, several photos stitched together) are cut into overlapping vertical strips and transcribed strip by strip. By default each strip is at most 768px tall with 150px overlap, so a strip up to 2048px wide is sent at full resolution (OpenAI's high-detail mode shrinks an image's short side to 768px). Every vision request asks for `detail: "high"`. Each strip after the first is given the last few lines above it, with their indentation, so nesting carries across strips. Overlap between strips is removed with fuzzy line matching.
+
+```env
+OCR_SEGMENT_MAX_HEIGHT=768
+OCR_SEGMENT_OVERLAP=150
+OCR_SEGMENT_MIN_DENSITY_RATIO=0.5
+```
+
+A strip that returns much less text than the ink on it implies (below half the characters-per-ink of the other strips), or no text at all despite having ink, marks the transcription incomplete and triggers the fallback model. Blank paper, including blank strips at the end of a page, is never treated as missing content.
+
+## Output Markers
+
+Transcriptions use these markers:
+
+- `*word*`: a word the model couldn't read confidently. Set `OCR_UNCERTAINTY_MARKERS=false` to stop asking for them (the quality check then relies on the completeness signals only).
+- `~~text~~`: handwriting that was crossed out. Struck text is never used for the summary or its action items.
+- `> [!warning] OCR may be incomplete`: added at the top when the result is still incomplete or low quality after any fallback, so it's checked against the image.
+
+Each bullet is written on its own line at its nesting level (two spaces per level). A bullet that wraps onto a second line on the page is joined back into one line. Blank lines between blocks are kept.
+
+## OCR Correction
+
+After validation, a correction pass can re-read flagged phrases from the image. Set the mode in `handwriting-reference.json` under `ocrCorrection.mode`:
+
+- `legacy` (default): previous behavior.
+- `narrow`: only garbled-character issues. The validator's guessed meaning is never passed to the model, answers that add or remove words are rejected, only the strip the phrase came from is used, and a phrase that appears more than once is skipped.
+- `off`: no correction (same as `"enabled": false`).
+
 ## Image Compression
 
 ```env
@@ -137,6 +167,24 @@ HANDWRITING_REFERENCE_FILE=./handwriting-reference.json
 
 To improve OCR accuracy, create a reference image with sample uppercase letters, lowercase letters, numbers, a pangram, and common words, then set `referenceImagePath` in [handwriting-reference.json](handwriting-reference.json).
 
+`HANDWRITING_REFERENCE_MODE` chooses how the reference is used: `image` (default) sends the reference image, downscaled once to 1536px wide, before every page or strip. `words` adds the reference words to the prompt instead. `off` uses neither. If the image is missing, `image` falls back to `words`.
+
+### Local glossary overlay
+
+Real names, internal product names, acronyms and your personal shorthand don't belong in the committed reference file (this repo is public). Put them in `handwriting-reference.local.json` next to it. That file is git-ignored and merged into `domainGlossary` at load time: `properNouns` and `businessTerms` are appended, and `acronyms` and `abbreviations` are added, with local entries winning on conflict.
+
+```json
+{
+  "domainGlossary": {
+    "properNouns": ["Jane", "Project Name"],
+    "acronyms": { "ABC": "what it stands for" },
+    "abbreviations": { "es.": "e.g.", "w/": "with" }
+  }
+}
+```
+
+`abbreviations` are listed in the OCR prompt so your shorthand is recognized and transcribed as written.
+
 ## Commands
 
 ```bash
@@ -148,7 +196,10 @@ npm test
 npm run test-ocr
 npm run test-ocr-suite
 npm run experiment-ocr
+npm run eval:fidelity -- <image> <verified.md> [--runs N] [--set KEY=VALUE ...] [--correction legacy|narrow|off] [--src <dir>]
 ```
+
+`eval:fidelity` runs the real OCR path (live API calls) against a hand-verified transcription and reports how many words were kept, how many lines came out as their own line, indent agreement, struck-line handling, run-to-run spread and token usage. `--set` applies env overrides for a comparison (for example `--set OCR_SEGMENT_MAX_HEIGHT=1200` or `--set AI_MODEL_OCR=gpt-6-luna`). `--src` measures another checkout, such as a worktree of an older commit. Keep real fixtures in `eval-private/` (git-ignored). Results are saved to a `results/` folder next to the verified file.
 
 ## Troubleshooting
 

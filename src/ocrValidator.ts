@@ -48,6 +48,8 @@ const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
 
 const VALIDATION_SYSTEM_PROMPT = `You are an OCR quality analyst. Your role is to analyze handwritten note transcriptions and identify quality issues WITHOUT correcting them.
 
+The input is terse handwritten meeting shorthand. Abbreviations (w/, es., biz, curr, defn), sentence fragments, dropped articles and verbs, and arrows are normal. Fragments like these do not count as grammar errors and are never critical. Flag text that looks misread (garbled characters, impossible words, broken symbols), not text that is merely terse.
+
 Analyze the provided OCR transcription for:
 
 1. **Grammatical Issues**: Phrases that violate basic grammar rules
@@ -347,8 +349,22 @@ export interface CorrectionLog {
   confidence: number;
 }
 
+/**
+ * legacy: behavior before fix-ocr-fidelity (default until the evaluation decides).
+ * narrow: garbled-character fixes only, no validator guess, word-count guard,
+ *         only the strip(s) the phrase came from, ambiguous phrases skipped.
+ * off:    no correction requests.
+ */
+export type CorrectionMode = 'legacy' | 'narrow' | 'off';
+
+export interface CorrectionContext {
+  /** Per-segment transcriptions from OCR, in segment order (same segmentation as correction). */
+  segmentTexts?: string[];
+}
+
 export interface CorrectionConfig {
   enabled: boolean;
+  mode?: CorrectionMode;
   correctCriticalOnly: boolean;
   tagCorrections: boolean;
   maxCorrectionsPerImage: number;
@@ -357,6 +373,7 @@ export interface CorrectionConfig {
 
 const DEFAULT_CORRECTION_CONFIG: CorrectionConfig = {
   enabled: true,
+  mode: 'legacy',
   correctCriticalOnly: true,
   tagCorrections: true,
   maxCorrectionsPerImage: 10,
@@ -426,12 +443,15 @@ export async function correctOCRIssues(
   originalText: string,
   imageBuffer: Buffer,
   validation: ValidationReport,
-  config?: Partial<CorrectionConfig>
+  config?: Partial<CorrectionConfig>,
+  context: CorrectionContext = {}
 ): Promise<CorrectionResult> {
   const cfg = { ...DEFAULT_CORRECTION_CONFIG, ...config };
+  const mode: CorrectionMode = cfg.enabled === false ? 'off' : cfg.mode ?? 'legacy';
+  const narrow = mode === 'narrow';
 
   // Early returns
-  if (!cfg.enabled) {
+  if (mode === 'off') {
     return { correctedText: originalText, corrections: [], correctionCount: 0 };
   }
 
@@ -446,6 +466,12 @@ export async function correctOCRIssues(
 
   if (cfg.correctCriticalOnly) {
     criticalIssues = criticalIssues.filter(i => i.severity === 'critical');
+  }
+
+  // Narrow mode fixes only garbled characters; grammar, semantic and "incomplete"
+  // findings on shorthand are where the meaning-changing rewrites came from.
+  if (narrow) {
+    criticalIssues = criticalIssues.filter(i => i.type === 'encoding');
   }
 
   if (criticalIssues.length === 0) {
@@ -479,15 +505,35 @@ export async function correctOCRIssues(
       continue;
     }
 
+    // Narrow: replacing "the first occurrence" of a phrase that appears more than
+    // once could change the wrong line, so ambiguous phrases are skipped.
+    if (narrow && countOccurrences(correctedText, issue.phrase) !== 1) {
+      continue;
+    }
+
     try {
       // Extract context
-      const context = extractContext(correctedText, issue.phrase);
+      const textContext = extractContext(correctedText, issue.phrase);
 
-      // Build correction prompt
-      const prompt = buildCorrectionPrompt(issue, context, glossary);
+      // Build correction prompt (narrow never passes the validator's guess)
+      const prompt = buildCorrectionPrompt(issue, textContext, glossary, !narrow);
+
+      // Narrow: send only the strip(s) whose transcription contains the phrase.
+      const onlySegments = narrow && context.segmentTexts
+        ? context.segmentTexts.flatMap((t, i) => (t.includes(issue.phrase) ? [i] : []))
+        : undefined;
 
       // Request targeted correction
-      const correctedPhrase = await requestPhraseCorrection(imageBuffer, prompt);
+      const correctedPhrase = await requestPhraseCorrection(
+        imageBuffer,
+        prompt,
+        onlySegments && onlySegments.length > 0 ? onlySegments : undefined
+      );
+
+      if (narrow && correctedPhrase && Math.abs(wordCount(correctedPhrase) - wordCount(issue.phrase)) > 1) {
+        console.log(`  ↩︎ Rejected correction that changes the word count: "${issue.phrase}" → "${correctedPhrase}"`);
+        continue;
+      }
 
       if (correctedPhrase && correctedPhrase !== issue.phrase && correctedPhrase.trim().length > 0) {
         // Tag if enabled
@@ -523,6 +569,17 @@ export async function correctOCRIssues(
   };
 }
 
+function countOccurrences(text: string, phrase: string): number {
+  if (!phrase) return 0;
+  let count = 0;
+  for (let i = text.indexOf(phrase); i !== -1; i = text.indexOf(phrase, i + phrase.length)) count++;
+  return count;
+}
+
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 /**
  * Extracts surrounding context for a phrase
  */
@@ -547,10 +604,11 @@ function extractContext(text: string, phrase: string, lines: number = 2): string
 function buildCorrectionPrompt(
   issue: ValidationIssue,
   context: string,
-  glossary: any
+  glossary: any,
+  includeSuggestion: boolean = true
 ): string {
   const template = CORRECTION_PROMPT_TEMPLATES[issue.type] || CORRECTION_PROMPT_TEMPLATES.grammar;
-  const guidance = getIssueGuidance(issue, glossary);
+  const guidance = getIssueGuidance(issue, glossary, includeSuggestion);
 
   return template
     .replace('{phrase}', issue.phrase)
@@ -561,11 +619,11 @@ function buildCorrectionPrompt(
 /**
  * Gets issue-specific guidance with glossary hints
  */
-function getIssueGuidance(issue: ValidationIssue, glossary: any): string {
+function getIssueGuidance(issue: ValidationIssue, glossary: any, includeSuggestion: boolean = true): string {
   const hints: string[] = [];
 
-  // Add validation suggestion if available
-  if (issue.suggestion) {
+  // Add validation suggestion if available (never in narrow mode)
+  if (includeSuggestion && issue.suggestion) {
     hints.push(`Validation suggests: ${issue.suggestion}`);
   }
 
@@ -601,7 +659,8 @@ const NOT_PRESENT_PATTERN = new RegExp(`^${NOT_PRESENT_SENTINEL}\\b`, 'i');
  */
 async function requestPhraseCorrection(
   imageBuffer: Buffer,
-  prompt: string
+  prompt: string,
+  onlySegments?: number[]
 ): Promise<string | null> {
   try {
     // Use the same width-only preprocessing as the primary OCR path, then split tall
@@ -623,7 +682,11 @@ async function requestPhraseCorrection(
       : 'You are a handwriting OCR correction specialist. Provide only the corrected phrase, no explanation or additional text.';
     const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
-    for (const segment of segments) {
+    const selected = onlySegments
+      ? segments.filter((_, i) => onlySegments.includes(i))
+      : segments;
+
+    for (const segment of selected) {
       let finalBuffer = segment.buffer;
       if (compressionConfig.enabled) {
         const compressionResult = await compressImageIfNeeded(
@@ -639,7 +702,8 @@ async function requestPhraseCorrection(
         fullPrompt,
         base64Image,
         'image/jpeg',
-        'ocr'
+        'ocr',
+        { detail: 'high' }
       );
 
       const corrected = response.content?.trim();

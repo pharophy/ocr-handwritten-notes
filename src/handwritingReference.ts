@@ -7,6 +7,8 @@ export interface DomainGlossary {
   acronyms?: Record<string, string>;
   properNouns?: string[];
   businessTerms?: string[];
+  /** The writer's personal shorthand, e.g. { "es.": "e.g." }. Transcribed as written. */
+  abbreviations?: Record<string, string>;
   specialNotation?: {
     arrow?: string;
     description?: string;
@@ -27,6 +29,7 @@ export interface HandwritingReferenceConfig {
   };
   ocrCorrection?: {
     enabled?: boolean;
+    mode?: 'legacy' | 'narrow' | 'off';
     correctCriticalOnly?: boolean;
     tagCorrections?: boolean;
     maxCorrectionsPerImage?: number;
@@ -68,7 +71,7 @@ export async function loadHandwritingReference(
     }
 
     console.log('✓ Loaded handwriting reference configuration');
-    return config;
+    return await mergeLocalOverlay(config, configPath);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       console.log('ℹ️  No handwriting reference found (optional)');
@@ -79,6 +82,40 @@ export async function loadHandwritingReference(
     }
     return {};
   }
+}
+
+/** Git-ignored overlay for personal names, terms and abbreviations (never committed). */
+export const LOCAL_OVERLAY_FILENAME = 'handwriting-reference.local.json';
+
+function uniqueConcat(a: string[] = [], b: string[] = []): string[] {
+  return [...new Set([...a, ...b])];
+}
+
+/**
+ * Merge `handwriting-reference.local.json` (next to the reference file) into the
+ * committed glossary: names and terms are appended (deduplicated); acronyms and
+ * abbreviations are added, with the local entry winning on a key conflict.
+ */
+async function mergeLocalOverlay(config: HandwritingReferenceConfig, configPath: string): Promise<HandwritingReferenceConfig> {
+  const overlayPath = path.join(path.dirname(configPath), LOCAL_OVERLAY_FILENAME);
+  let overlay: HandwritingReferenceConfig;
+  try {
+    overlay = JSON.parse(await fs.readFile(overlayPath, 'utf-8'));
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`⚠️  Ignoring ${LOCAL_OVERLAY_FILENAME} (${error.message}) at ${overlayPath}`);
+    }
+    return config;
+  }
+  const local = overlay?.domainGlossary;
+  if (!local || typeof local !== 'object') return config;
+  const merged: DomainGlossary = { ...(config.domainGlossary || {}) };
+  if (local.acronyms) merged.acronyms = { ...(merged.acronyms || {}), ...local.acronyms };
+  if (local.abbreviations) merged.abbreviations = { ...(merged.abbreviations || {}), ...local.abbreviations };
+  if (local.properNouns) merged.properNouns = uniqueConcat(merged.properNouns, local.properNouns);
+  if (local.businessTerms) merged.businessTerms = uniqueConcat(merged.businessTerms, local.businessTerms);
+  console.log(`✓ Merged local glossary overlay (${LOCAL_OVERLAY_FILENAME})`);
+  return { ...config, domainGlossary: merged };
 }
 
 /**
@@ -213,15 +250,20 @@ export function getDomainGlossary(config: HandwritingReferenceConfig): DomainGlo
 /**
  * Format domain glossary into a prompt-friendly string for the system prompt
  */
-export function formatGlossaryContext(glossary: DomainGlossary): string {
+export function formatGlossaryContext(
+  glossary: DomainGlossary,
+  options: { uncertaintyMarkers?: boolean } = {}
+): string {
   if (!glossary || Object.keys(glossary).length === 0) {
     return '';
   }
+  const markers = options.uncertaintyMarkers !== false;
 
   const sections: string[] = [];
   sections.push('');
   sections.push('📋 Business & Technical Context:');
   sections.push('You are transcribing meeting notes that frequently contain specialized terminology:');
+  sections.push('Use these lists only to recognize words that are actually written. Never replace a written word with a glossary term that merely looks similar.');
   sections.push('');
 
   if (glossary.acronyms && Object.keys(glossary.acronyms).length > 0) {
@@ -244,6 +286,14 @@ export function formatGlossaryContext(glossary: DomainGlossary): string {
     sections.push('');
   }
 
+  if (glossary.abbreviations && Object.keys(glossary.abbreviations).length > 0) {
+    sections.push("Writer's personal abbreviations (transcribe them exactly as written):");
+    for (const [abbr, meaning] of Object.entries(glossary.abbreviations)) {
+      sections.push(`- ${abbr} means ${meaning}`);
+    }
+    sections.push('');
+  }
+
   if (glossary.specialNotation) {
     sections.push('Special Notation:');
     if (glossary.specialNotation.arrow) {
@@ -256,11 +306,15 @@ export function formatGlossaryContext(glossary: DomainGlossary): string {
   }
 
   sections.push('⚠️ Uncertainty Guidelines:');
-  sections.push('- If you see text that MIGHT be one of the above acronyms but you\'re unsure, transcribe what you see and mark it with *italics*');
-  sections.push('- If a word is completely illegible, mark it as *[illegible]*');
+  if (markers) {
+    sections.push('- If you see text that MIGHT be one of the above acronyms but you\'re unsure, transcribe what you see and mark it with *italics*');
+    sections.push('- If a word is completely illegible, mark it as *[illegible]*');
+  }
   sections.push('- If you see arrows or special notation, preserve them exactly (use →)');
   sections.push('- When you see an acronym in all caps, keep it in all caps');
-  sections.push('- If a phrase doesn\'t make grammatical sense, mark questionable words with *italics*');
+  if (markers) {
+    sections.push('- If a phrase doesn\'t make grammatical sense, mark questionable words with *italics*');
+  }
   sections.push('');
 
   return sections.join('\n');
