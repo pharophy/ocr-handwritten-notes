@@ -20,3 +20,7 @@ test-results/
 dist/
 build/
 .env.openai
+
+# Private OCR evaluation fixtures and personal glossary (real notes and names; this repo is public)
+eval-private/
+handwriting-reference.local.json
