@@ -22,6 +22,16 @@ interface AggregationMetadata {
 const MONITORED_FOLDER = getPrimaryMonitoredFolder();
 const COMPLETED_MARKERS = ['(Done)', '(done)', '[X]', '[x]'];
 
+// Summary files write section labels either as Markdown headers ("### Action Items")
+// or as plain "Label:" lines (older OCR output). Match both forms, and treat any
+// known label — in either form — as a section boundary.
+const SECTION_LABELS = ['Summary', 'Action Items', 'Key Learnings', 'Key Decisions', 'Tags'];
+const SECTION_BOUNDARY = new RegExp(
+  `^(?:#{1,3}\\s+|(?:${SECTION_LABELS.join('|')})\\s*:)`,
+  'i'
+);
+const ACTION_ITEMS_HEADER = /^(?:#{1,3}\s*Action Items|Action Items\s*:)/i;
+
 /**
  * Extract action items from a Summary and Actions markdown file
  */
@@ -35,14 +45,14 @@ async function extractActionItems(filePath: string): Promise<ActionItem[]> {
     const items: ActionItem[] = [];
 
     for (const line of lines) {
-      // Check if we're entering the Action Items section
-      if (line.match(/^#{1,3}\s*Action Items/i)) {
+      // Check if we're entering the Action Items section ("### Action Items" or "Action Items:")
+      if (line.match(ACTION_ITEMS_HEADER)) {
         inActionSection = true;
         continue;
       }
 
-      // Exit action section if we hit another header
-      if (inActionSection && line.match(/^#{1,3}\s+/)) {
+      // Exit action section if we hit another section header (Markdown or plain "Label:")
+      if (inActionSection && line.match(SECTION_BOUNDARY)) {
         break;
       }
 

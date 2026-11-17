@@ -48,6 +48,20 @@ const COMPLETED_MARKERS = ['(Done)', '(done)', '[X]', '[x]'];
 const ACHIEVEMENT_KEYWORDS = ['achieved', 'completed', 'finished', 'launched', 'delivered', 'shipped', 'success', 'successful', 'won', 'closed'];
 const DECISION_KEYWORDS = ['finalized', 'resolved', 'approved', 'agreed', 'decided', 'confirmed'];
 
+// Summary files write section labels either as Markdown headers ("### Summary")
+// or as plain "Label:" lines (older OCR output). Match both forms, and treat any
+// known label — in either form — as a section boundary.
+const SECTION_LABELS = ['Summary', 'Action Items', 'Key Learnings', 'Key Decisions', 'Tags'];
+const SECTION_BOUNDARY = new RegExp(
+  `^(?:#{1,3}\\s+|(?:${SECTION_LABELS.join('|')})\\s*:)`,
+  'i'
+);
+
+/** Regex matching a section's header in either "### Label" or "Label:" form. */
+function sectionHeader(label: string): RegExp {
+  return new RegExp(`^(?:#{1,3}\\s*${label}|${label}\\s*:)`, 'i');
+}
+
 /**
  * Parse meeting date from filename
  */
@@ -81,8 +95,8 @@ function extractSection(content: string, headerPattern: RegExp): string[] {
       continue;
     }
 
-    // Exit section if we hit another header
-    if (inSection && line.match(/^#{1,3}\s+/)) {
+    // Exit section if we hit another section header (Markdown or plain "Label:")
+    if (inSection && line.match(SECTION_BOUNDARY)) {
       break;
     }
 
@@ -112,11 +126,11 @@ async function extractMeetingInsights(filePath: string): Promise<MeetingInsight 
     const date = parseMeetingDate(meetingName);
 
     // Extract all sections
-    const summaryLines = extractSection(content, /^#{1,3}\s*Summary/i);
-    const actionLines = extractSection(content, /^#{1,3}\s*Action Items/i);
-    const learningLines = extractSection(content, /^#{1,3}\s*Key Learnings/i);
-    const decisionLines = extractSection(content, /^#{1,3}\s*Key Decisions/i);
-    const tagLines = extractSection(content, /^#{1,3}\s*Tags/i);
+    const summaryLines = extractSection(content, sectionHeader('Summary'));
+    const actionLines = extractSection(content, sectionHeader('Action Items'));
+    const learningLines = extractSection(content, sectionHeader('Key Learnings'));
+    const decisionLines = extractSection(content, sectionHeader('Key Decisions'));
+    const tagLines = extractSection(content, sectionHeader('Tags'));
 
     // Parse action items
     const actionItems: ActionItem[] = actionLines
